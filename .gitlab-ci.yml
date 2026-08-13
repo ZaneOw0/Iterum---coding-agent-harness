@@ -1,0 +1,7 @@
+# .gitlab-ci.yml — 业务要求：必须包含名为 unit-test 的 job
+unit-test:
+  image: oven/bun:1
+  script:
+    - bun install --frozen-lockfile
+    - make test
+    - make demo

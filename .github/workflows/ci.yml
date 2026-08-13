@@ -1,0 +1,35 @@
+name: ci
+
+on: push
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: make test
+      - run: make demo
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: bun-linux-x64, out: iterum-linux-x64 }
+          - { os: macos-latest, target: bun-darwin-arm64, out: iterum-macos-arm64 }
+          - { os: windows-latest, target: bun-windows-x64, out: iterum-win-x64.exe }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun build --compile --target=${{ matrix.target }} packages/cli/src/main.ts --outfile dist/${{ matrix.out }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.out }}
+          path: dist/${{ matrix.out }}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+bun.lockb
+.DS_Store
+spikes/dist/
+
+# 本地输入文档（不纳入 git，仅本地保留）
+业务总览.md
+opencode-tui-design-spec.md

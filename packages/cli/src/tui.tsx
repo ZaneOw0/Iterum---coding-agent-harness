@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { render } from "ink"
 import { App } from "@iterum/tui/src/App"
 import type { AgentLoop } from "@iterum/core/agent/loop"
-import type { Session } from "@iterum/core/transcript/types"
+import type { Session, ToolPart, PermissionPart, FeedbackPart } from "@iterum/core/transcript/types"
 import type { SessionEvent } from "@iterum/core/transcript/events"
 
 export function reduceSession(session: Session, event: SessionEvent): Session {
@@ -29,6 +29,45 @@ export function reduceSession(session: Session, event: SessionEvent): Session {
         else parts.push({ type: "reasoning", markdown: event.text, time: { start: Date.now(), end: Date.now() } })
       }
       return { ...m, parts }
+    })
+    return { ...session, messages }
+  }
+  if (event.type === "tool_started") {
+    const messages = session.messages.map((m, i) => {
+      if (i !== session.messages.length - 1) return m
+      const part: ToolPart = { type: "tool", tool: event.tool, args: event.args, state: "running", time: { start: Date.now(), end: 0 } }
+      return { ...m, parts: [...m.parts, part] }
+    })
+    return { ...session, messages }
+  }
+  if (event.type === "tool_completed") {
+    const messages = session.messages.map((m, i) => {
+      if (i !== session.messages.length - 1) return m
+      const parts = [...m.parts]
+      for (let j = parts.length - 1; j >= 0; j--) {
+        const p = parts[j]
+        if (p && p.type === "tool" && p.state === "running") {
+          parts[j] = { ...p, state: event.result.ok ? "completed" : "error", result: event.result, time: { ...p.time, end: Date.now() } }
+          break
+        }
+      }
+      return { ...m, parts }
+    })
+    return { ...session, messages }
+  }
+  if (event.type === "permission_requested") {
+    const messages = session.messages.map((m, i) => {
+      if (i !== session.messages.length - 1) return m
+      const part: PermissionPart = { type: "permission", request: event.request }
+      return { ...m, parts: [...m.parts, part] }
+    })
+    return { ...session, messages }
+  }
+  if (event.type === "feedback_injected") {
+    const messages = session.messages.map((m, i) => {
+      if (i !== session.messages.length - 1) return m
+      const part: FeedbackPart = { type: "feedback", verifier: event.verifier, status: "fail", summary: event.summary, failureIndex: event.failureIndex }
+      return { ...m, parts: [...m.parts, part] }
     })
     return { ...session, messages }
   }

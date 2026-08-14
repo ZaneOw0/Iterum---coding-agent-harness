@@ -444,3 +444,7 @@ CredentialEntry { provider, source: "keychain"|"env", status: set|unset }  # 永
 | E19 | 工具路径 `..` 越界拒绝 | §3.3 | M2（B1 评审发现无 M1 task 承接） |
 | E20 | bash 命令 120s 超时强制终止 | §3.3 | M2（同上） |
 | E21 | frontmatter 告警与 CRLF 兼容 | §3.6 | M2（M1 仅跳过；CRLF SKILL.md 静默跳过） |
+| E22 | TUI 模式交互式权限 ask（DialogHost 挂载 + composer 阻塞） | §3.4/§3.11 | M1 cli TUI 路径未挂载 DialogHost，`resolvePermission` 自动 deny（`--allow` 放行）；M2 挂载 DialogHost 进 `<App>` 并阻塞 composer |
+| E23 | 启动恢复最近 session（cli 入口未调用 SessionStore） | §3.8 | core SessionStore 已实现并有测试（T13），但 cli 入口无恢复调用；M2 接入启动恢复 + `new/list/resume`（命令集见 E9） |
+| E24 | MCP server 配置接入（cli 加载配置并注册工具） | §3.9 | core MCPClient 已实现并有测试（T12），但 cli 无 MCP 配置加载与工具注册；M2 接入（连接数上限/重连退避见 E8） |
+| E25 | BashTool 跨平台（cli 硬编码 `cmd /c`） | §3.3/§8 | main.ts 硬编码 `cmd /c`——Windows 开发验证平台可用，但分发的 linux/macos 二进制 bash 工具不可执行；M2 平台条件 spawn |

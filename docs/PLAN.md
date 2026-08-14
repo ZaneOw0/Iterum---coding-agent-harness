@@ -2677,7 +2677,7 @@ T1 (scaffold)
 
 > **诚实性声明**：初版自审（v1.0）结论"无缺口"已被 §4.5 冷启动试运行推翻——陌生 subagent 发现 20 个暂停点、10 处内部矛盾（详见 SPEC_PROCESS.md §6）。本节为修订后（v1.1）的如实记录：本计划不保证"零缺口"，但保证"所有已知缺口都有登记与处置"（SPEC 附录 B）。
 
-1. **Spec 覆盖（v1.1）**：SPEC §3.1→T4/T5；§3.2→T9；§3.3→T6；§3.4→T7；§3.5→T8/T9；§3.6→T11；§3.7→T3；§3.8→T13；§3.9→T12；§3.10→T10；§3.11→T15/T16；§3.12→T14；§4 安全→T10/T19；§5 重点维度→T8/T9/T17；§8 分发→T18；验收标准 1-11 均有对应 task（9→T20，10→T19，11→全流程）。M1 未实现的 SPEC 条款全部登记于 SPEC 附录 B.2（E1-E18），逐条标注"M1 豁免 / 后置 M2 / 遗漏"。
+1. **Spec 覆盖（v1.1）**：SPEC §3.1→T4/T5；§3.2→T9；§3.3→T6；§3.4→T7；§3.5→T8/T9；§3.6→T11；§3.7→T3；§3.8→T13；§3.9→T12；§3.10→T10；§3.11→T15/T16；§3.12→T14；§4 安全→T10/T19；§5 重点维度→T8/T9/T17；§8 分发→T18；验收标准 1-11 均有对应 task（9→T20，10→T19，11→全流程）。M1 未实现的 SPEC 条款全部登记于 SPEC 附录 B.2（E1-E25），逐条标注"M1 豁免 / 后置 M2 / 遗漏"。
 2. **占位符扫描（v1.1）**：无 TBD/TODO；T16 Step 3 已从 prose 补为完整代码；demo2/demo3 已从"同构"补为完整断言脚本；SDK 精确 API 的注记（T12 listTools）允许实现期适配，但以测试绿为强制门。
 3. **类型一致性（v1.1）**：`ToolResult/ToolCall/Tool`（T6 定义，T7/T8/T9/T11/T12 消费一致）；`PermissionRequest`（T3 定义，T9 消费）；`PermissionCheckResult`（T7 定义，T9 消费）；`Skill/buildSkillSection/ReadSkillTool`（T11 定义，T9/T14 消费）；`formatFeedback`（T8 定义，T9 使用）；`Session.createdAt/updatedAt`（T3 定义，T13 消费）；`SessionSummary`（T13 定义）；`MockProvider` 嵌套脚本语义（T4 定义，T9 测试 3/T17 使用）。核心事件名（`feedback_injected/session_idle/permission_requested`）在 T3/T9/T17 一致。T9 测试 3 与实现、demo1 断言与循环语义、T10 fixture 路径、Ink opacity prop 四处硬矛盾已修复（SPEC 附录 B.1 D1-D5）。
 

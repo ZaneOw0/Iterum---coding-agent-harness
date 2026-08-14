@@ -122,4 +122,4 @@
 
 产物（run 31803854521，headSha 3423cc2，均未过期）：iterum-win-x64.exe（40,589,103 B）、iterum-macos-arm64（25,391,605 B）、iterum-linux-x64（39,872,975 B）。
 
-> 要求：最后一次 CI/CD 执行必须为 pass。——当前满足：最后一次核验 run 为 31804736043（T20 合并，headSha 60e478a，4 job 全绿，2026-08-14）；本 T23 文档分支合并后的 main run 由 controller 核验后补记。
+> 要求：最后一次 CI/CD 执行必须为 pass。——当前满足：核验时点最新 run 为 31806677023（PR #25 合并 T23 文档分支，headSha df884e0，unit-test + 三平台 build 4 job 全 success，50s，2026-08-14）：https://github.com/ZaneOw0/Iterum---coding-agent-harness/actions/runs/31806677023 。本 T24 分支合并后还会触发一个新 run，其后续持续绿色可由该链接的 run 历史可见。

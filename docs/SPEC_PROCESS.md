@@ -199,7 +199,7 @@ T3（transcript 数据契约——全项目共享契约，源头偏差会被放�
 - §3.3：工具清单收敛为 read/write/bash（run_* 归 VerifyRunner，消除与 §3.5 的重叠）
 - §3.4：新增 headless 默认 deny + 稳定键序签名两条边界条件
 - §3.5：验证命令 `ITERUM_TEST_CMD`/默认 `bun test`（消除"检测"歧义）
-- 新增 **附录 B：SPEC↔PLAN 差异登记表**（B.1 十九项 M1 已修订 + B.2 十八项 M2 后置清单）
+- 新增 **附录 B：SPEC↔PLAN 差异登记表**（B.1 十九项 M1 已修订 + B.2 十八项 M2 后置清单）（实现轮次评审中追加至 E25）
 
 **PLAN.md（v1.0 → v1.1）**（19 处修订，全部对应附录 B.1）：
 - T1 补 tsconfig（react-jsx）、tui/cli package.json、@types/bun、commit 清单

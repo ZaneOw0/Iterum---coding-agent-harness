@@ -5,8 +5,21 @@ import { Transcript } from "./components/Transcript"
 import { Composer } from "./components/Composer"
 import { Footer } from "./components/Footer"
 import { Sidebar } from "./components/Sidebar"
+import { ConnectWizard, type ConnectWizardProps } from "./components/ConnectWizard"
+import { ModelPicker, type ModelPickerProps } from "./components/ModelPicker"
+import { EffortPicker, type EffortPickerProps } from "./components/EffortPicker"
 
-export function App({ session, onSubmit = () => {}, connected = true }: { session: Session; onSubmit?: (text: string) => void; connected?: boolean }) {
+export function App(props: {
+  session: Session
+  onSubmit?: (text: string) => void
+  connected?: boolean
+  dialog?: "connect" | "model" | "effort" | null
+  modelLabel?: string
+  connectProps?: ConnectWizardProps
+  modelProps?: ModelPickerProps
+  effortProps?: EffortPickerProps
+}) {
+  const { session, onSubmit = () => {}, connected = true, dialog = null, modelLabel, connectProps, modelProps, effortProps } = props
   const { stdout } = useStdout()
   const wide = (stdout?.columns ?? 80) > 120
   return (
@@ -15,9 +28,16 @@ export function App({ session, onSubmit = () => {}, connected = true }: { sessio
         {wide ? <Sidebar session={session} /> : null}
         <Box flexDirection="column" flexGrow={1}>
           <Transcript session={session} />
-          <Composer onSubmit={onSubmit} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={session.model} />
+          <Composer onSubmit={onSubmit} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={modelLabel ?? session.model} disabled={dialog != null} />
         </Box>
       </Box>
+      {dialog === "connect" && connectProps
+        ? <ConnectWizard {...connectProps} />
+        : dialog === "model" && modelProps
+          ? <ModelPicker {...modelProps} />
+          : dialog === "effort" && effortProps
+            ? <EffortPicker {...effortProps} />
+            : null}
       <Footer cwd={session.cwd} permissionCount={0} mcpCount={0} connected={connected} />
     </Box>
   )

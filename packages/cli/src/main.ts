@@ -60,23 +60,24 @@ async function resolveState(mock: boolean, config: AgentConfig, store: Credentia
   if (config.provider) {
     const vendor = getVendor(config.provider)
     const cred = vendor ? await store.get(vendor.id) : undefined
+    const model = config.model ?? vendor?.defaultModel ?? ""
     if (vendor && cred) {
       const provider = vendor.flavor === "openai"
-        ? new OpenAIProvider({ apiKey: cred.key, model: config.model, vendor })
-        : new AnthropicProvider({ apiKey: cred.key, model: config.model, vendor })
-      return { provider, providerName: vendor.id, model: config.model ?? "", effort: config.effort, connected: true }
+        ? new OpenAIProvider({ apiKey: cred.key, model, vendor })
+        : new AnthropicProvider({ apiKey: cred.key, model, vendor })
+      return { provider, providerName: vendor.id, model, effort: config.effort, connected: true }
     }
     // 配置了厂商但钥匙串无 key：mock 提示态，不报错（与既有无凭据 TUI 行为一致）
     return {
       provider: mockHint(`No ${config.provider} API key found. Run /connect to add a key — replying in mock mode until then.`),
-      providerName: config.provider, model: config.model ?? "", effort: config.effort, connected: false,
+      providerName: config.provider, model, effort: config.effort, connected: false,
     }
   }
   // 无 config：维持既有探测逻辑
   const openai = await store.get("openai")
-  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key }), providerName: "openai", model: "gpt-4o-mini", connected: true }
+  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key, vendor: getVendor("openai") }), providerName: "openai", model: getVendor("openai")?.defaultModel ?? "gpt-4o-mini", connected: true }
   const anthropic = await store.get("anthropic")
-  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key }), providerName: "anthropic", model: "claude-sonnet-4-5", connected: true }
+  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key, vendor: getVendor("anthropic") }), providerName: "anthropic", model: getVendor("anthropic")?.defaultModel ?? "claude-sonnet-4-5", connected: true }
   return {
     provider: mockHint("No provider credentials found. Run /connect to add a key — replying in mock mode until then."),
     providerName: "mock", model: "mock", connected: false,
@@ -128,7 +129,8 @@ export async function createRuntime(opts: { mock: boolean; allowDanger: boolean;
     state = next
     loop = buildLoop(state.provider, state.effort)
     session.model = state.model
-    writeConfig({ provider: state.providerName, model: state.model, effort: state.effort }, home)
+    // 读-合并-写：保留 modelCache 等既有字段（如 /model 拉取写入的缓存）
+    writeConfig({ ...readConfig(home), provider: state.providerName, model: state.model, effort: state.effort }, home)
     return 0
   }
 
@@ -146,7 +148,8 @@ export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "connect") return runConnect(argv.slice(1))
   if (argv.includes("--help")) {
     console.log("Usage: iterum [--headless] [--mock] [--allow] [--prompt <text>]")
-    console.log("       iterum connect <openai|anthropic> --set|--show|--clear [--from-stdin <key>]")
+    console.log("       iterum connect <厂商> --set|--show|--clear [--from-stdin <key>]")
+    console.log("       厂商: openai|anthropic|gemini|grok|moonshot|deepseek|zhipu|qwen")
     return 0
   }
   for (const a of argv) if (a.startsWith("-") && !["--headless", "--mock", "--prompt", "--allow"].includes(a)) return 2
@@ -159,10 +162,11 @@ export async function main(argv: string[]): Promise<number> {
 
   if (!headless && !process.stdin.isTTY) { console.log("interactive TUI requires a terminal; use --headless"); return 0 }
 
-  const runtime = await createRuntime({ mock, allowDanger, config: readConfig() })
+  const store = new CredentialStore()
+  const runtime = await createRuntime({ mock, allowDanger, config: readConfig(), store })
 
   if (!headless) {
-    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected })
+    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected, runtime, store })
     return 0
   }
   if (!runtime.connected && !mock) {

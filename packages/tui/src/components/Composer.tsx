@@ -4,9 +4,10 @@ import { useInput } from "ink"
 
 export interface Usage { tokens: number; percent: number; costUsd: number }
 
-export function Composer({ onSubmit, usage, model }: { onSubmit: (text: string) => void; usage: Usage; model?: string }) {
+export function Composer({ onSubmit, usage, model, disabled = false }: { onSubmit: (text: string) => void; usage: Usage; model?: string; disabled?: boolean }) {
   const [text, setText] = useState("")
   useInput((input, key) => {
+    if (disabled) return
     if (key.ctrl && input === "\r") { onSubmit(text); setText(""); return }
     if (key.return) { setText(t => t + "\n"); return }
     if (key.backspace || key.delete) { setText(t => t.slice(0, -1)); return }

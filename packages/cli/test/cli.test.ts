@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { main } from "../src/main"
+import { appArgs, main } from "../src/main"
 
 describe("cli", () => {
   test("--help exits 0 and prints usage", async () => {
@@ -19,5 +19,28 @@ describe("cli", () => {
     console.log = orig
     expect(code).toBe(0)
     expect(out.some(l => l.includes('"type":"session_idle"'))).toBe(true)
+  })
+})
+
+describe("appArgs", () => {
+  test("脚本模式 argv=[bun路径, 脚本路径, ...参数] 剥掉前两项", () => {
+    expect(appArgs(
+      ["C:/bun/bun.exe", "D:/Iterum/packages/cli/src/main.ts", "connect", "openai", "--show"],
+      "D:/Iterum/packages/cli/src/main.ts",
+    )).toEqual(["connect", "openai", "--show"])
+  })
+
+  test("编译模式 argv=[bun, 可执行文件, ...参数]（Bun 1.3.14 探针实测）剥掉前两项", () => {
+    expect(appArgs(
+      ["bun", "B:/~BUN/root/iterum.exe", "connect", "openai", "--show"],
+      "B:/~BUN/root/iterum.exe",
+    )).toEqual(["connect", "openai", "--show"])
+  })
+
+  test("编译模式 argv=[可执行文件, ...参数] 剥掉第一项", () => {
+    expect(appArgs(
+      ["C:/x/iterum.exe", "connect", "openai", "--show"],
+      "C:/x/iterum.exe",
+    )).toEqual(["connect", "openai", "--show"])
   })
 })

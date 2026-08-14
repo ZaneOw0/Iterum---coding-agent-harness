@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+~/.iterum/
 bun.lockb
 .DS_Store
 spikes/dist/
@@ -12,3 +13,6 @@ opencode-tui-design-spec.md
 
 # git worktrees 隔离工作区
 .worktrees/
+
+# subagent-driven-development 工作区（ledger/简报/评审包）
+.superpowers/

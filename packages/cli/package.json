@@ -1,0 +1,6 @@
+{
+  "name": "@iterum/cli",
+  "version": "0.1.0",
+  "module": "src/main.ts",
+  "dependencies": { "@iterum/core": "workspace:*" }
+}

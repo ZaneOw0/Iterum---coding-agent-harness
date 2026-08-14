@@ -4,7 +4,7 @@ Iterum 是一个 **CLI-only** 的 coding agent（类 Claude Code / opencode）�
 
 其核心机制是**可观察、可断言、可演示的客观反馈闭环**：agent 每次工具动作后自动运行验证（M1 为测试命令，`ITERUM_TEST_CMD` 可配；lint/类型检查验证集为 M2），失败结果归一化回灌进下一轮决策驱动自我修正，连续失败达到阈值后停下向用户求助。
 
-> 状态：**M1 已实现**（core 全模块 / TUI 渲染层组件 / cli `--headless` + `connect` / demos 三件套 / 三平台二进制与 Docker 分发）。设计文档见 `docs/SPEC.md`，实现计划见 `docs/PLAN.md`，过程记录见 `docs/SPEC_PROCESS.md` / `docs/AGENT_LOG.md`，TUI 基线自查见 `docs/tui-must-checklist.md`，安全边界见 `docs/security.md`。交互式 TUI 接线（`<App>` 挂载）为后续任务，见"已知限制"。
+> 状态：**M1 已实现**（core 全模块 / TUI 渲染层组件 / cli `--headless` + `connect` / demos 三件套 / 三平台二进制与 Docker 分发）。设计文档见 `docs/SPEC.md`，实现计划见 `docs/PLAN.md`，过程记录见 `docs/SPEC_PROCESS.md` / `docs/AGENT_LOG.md`，TUI 基线自查见 `docs/tui-must-checklist.md`，安全边界见 `docs/security.md`。交互式 TUI 已接线（T22：TTY 下 `runTui` 挂载 `<App>`，Composer 提交驱动 AgentLoop 事件流；非 TTY 提示使用 `--headless`）；Permission Dialog 挂载等打磨为后续任务，见"已知限制"。
 
 ---
 
@@ -12,7 +12,7 @@ Iterum 是一个 **CLI-only** 的 coding agent（类 Claude Code / opencode）�
 
 - **Structured transcript**：assistant 消息由 text / reasoning / tool / permission / feedback parts 组成（设计基线 `opencode-tui-design-spec.md`）
 - **反馈闭环（重点维度）**：验证失败自动回灌 + 连续失败阈值（默认 3，`AgentLoop` 构造参数 `feedbackThreshold` 可配）停手求助
-- **治理护栏**：危险命令黑名单（rm -rf / force push / DROP TABLE 等，可配置）+ 会话级审批记忆，TUI 阻塞式 Permission Prompt
+- **治理护栏**：危险命令黑名单（rm -rf / force push / DROP TABLE 等，可配置）+ 会话级审批记忆，TUI 阻塞式 Permission Prompt（设计目标，M1 未接线）
 - **凭据安全**：OS 钥匙串主存储（Windows 凭据管理器 / macOS Keychain / Linux Secret Service）+ `.env` 回退 + 首录引导（隐藏输入、掩码查看）
 - **自定义 skills**：SKILL.md 双级发现（全局 `~/.iterum/skills` / 项目 `.iterum/skills`），description 常驻注入、正文按需读取
 - **MCP**：stdio transport 客户端（HTTP/SSE 为实验项），工具结果统一回灌 transcript
@@ -58,16 +58,16 @@ make test
 ```bash
 iterum --headless --mock --prompt "..."   # 无头模式，事件流 JSON 行输出（CI/脚本/机制演示）
 # 真实 provider 未接线：不加 --mock 会报错退出（exit 1），配置凭据也不会启用——为后续任务（见"已知限制"）
-iterum --allow ...                        # headless 默认拒绝危险动作（安全默认），--allow 显式放行
+iterum --headless --mock --allow --prompt "..."   # --allow 显式放行危险动作（headless 默认拒绝；须配合 --headless 使用）
 iterum connect openai --set               # 凭据录入（隐藏输入）/ --show 掩码查看 / --clear 清除
 ```
 
-- TUI：渲染层组件已就绪（Transcript / Composer / Footer / DialogHost / PermissionDialog / Sidebar，`packages/tui/`），但 M1 的 cli 入口尚未挂载 `<App>`，当前非 `--headless` 启动会提示使用 headless。交互式 TUI 接线为后续任务。
-- slash 命令（`/status` `/model` `/skills` `/mcp`）为 M2（SPEC 附录 B E9）；M1 的凭据交互通道为 `iterum connect` 子命令（等价于 `/connect` 的四操作）。
+- TUI：T22 已完成接线——TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动 AgentLoop 事件流；非 TTY 启动提示使用 `--headless`（exit 0）。Permission Dialog 挂载（DialogHost 尚未接入 `<App>`）与真 TTY 体验打磨为后续任务。
+- slash 命令（`/status` `/model` `/skills` `/mcp`）为 M2（SPEC §4.3 键盘优先要求）；M1 的凭据交互通道为 `iterum connect` 子命令（等价于 `/connect` 的四操作）。
 
 ### Key 如何安全配置（目标机器）
 
-1. **推荐**：交互终端运行 `iterum connect openai --set`（或 `anthropic`），隐藏输入引导录入（回显 `*`）→ 写入 **OS 钥匙串**（Windows 凭据管理器 / macOS Keychain / Linux Secret Service）。`--show` 仅显示掩码（如 `sk-…ab12`）与来源；`--clear` 清除。脚本/CI 可用 `--from-stdin <key>` 参数注入（key 作为命令行参数传入，**会进入 shell history**，仅适合脚本/CI；交互场景请用 `--set` 隐藏录入）。
+1. **推荐**：交互终端运行 `iterum connect openai --set`（或 `anthropic`），隐藏输入引导录入（回显 `*`）→ 写入 **OS 钥匙串**（Windows 凭据管理器 / macOS Keychain / Linux Secret Service）。`--show` 仅显示掩码（如 `sk-…ab12`）与来源；`--clear` 清除。脚本/CI 可用 `--from-stdin <key>` 参数注入（**与 `--set` 联用**：`iterum connect openai --set --from-stdin <key>`；key 作为命令行参数传入，**会进入 shell history**，仅适合脚本/CI；交互场景请用 `--set` 隐藏录入）。
 2. **回退**：项目目录 `.env` 文件写入 `ITERUM_OPENAI_API_KEY=...` / `ITERUM_ANTHROPIC_API_KEY=...`（由程序读文件加载，非 shell export）。**明文风险**：`.env` 为明文文件、且加载后对同机进程环境可见；`--show` 会标记来源为 `env`。
 3. **不要**：命令行 `export`（会进入 shell history）；不要把 key 写进代码、配置文件提交到 git（仓库 `.gitignore` 已排除 `.env`）。
 
@@ -112,7 +112,6 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 │   ├── tui/                 # Ink 渲染层：transcript / composer / footer / dialogs / sidebar
 │   └── cli/                 # 入口、--headless 与 connect 凭据交互
 ├── demos/                   # 机制演示脚本（mock LLM 确定性断言）
-├── tests/                   # 跨包集成测试
 ├── Dockerfile
 ├── Makefile
 ├── .gitlab-ci.yml
@@ -133,7 +132,7 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 ## 已知限制
 
 - Windows 二进制未签名（SmartScreen 拦截）；容器内无 OS 钥匙串（key 只能经 `.env` 挂载注入）；仅 Windows Terminal/现代终端完整支持 TUI，旧 console 降级纯文本。
-- M1 cli 入口未挂载 TUI（当前仅 `--headless`；`<App>` 渲染层组件已实现并有测试，接线为后续任务）。
+- TUI 已接线但不完整：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动事件流；Permission Dialog 尚未挂载（DialogHost 未接入 `<App>`），真 TTY 体验打磨为后续任务。
 - `--headless` 未接真实 provider：当前仅 `--mock` 可用，不加 `--mock` 即报错退出（exit 1，即使已配置凭据）；真实 provider 接线为后续任务。
 - slash 命令（`/status` `/model` 等）、`new/list/resume` 会话管理、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
 - MCP HTTP/SSE transport 为实验项；lint/typecheck 验证集、结构化日志、ProviderError 重试体系为 M2。

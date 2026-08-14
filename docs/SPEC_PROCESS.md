@@ -105,7 +105,103 @@
 
 ---
 
-## 5. 对 brainstorming 技能的反思（人工填写区）
+## 6. 冷启动试运行（§4.5 自我验证）
+
+### 6.1 实验设置
+
+- **第二智能体**：opencode subagent（`general` 类型，与主开发 agent `build` 不同），全新会话、零对话历史、零记忆导入。
+- **输入**：仅 `docs/SPEC.md` + `docs/PLAN.md`（worktree 副本），无任何口头补充。
+- **指令**：自主选择 1-2 个 task 做实施预演（不写代码），遇到不确定之处暂停提问、禁止猜测。
+- **约束**：只读，不写文件，不执行命令。
+
+### 6.2 它选择了什么
+
+T3（transcript 数据契约——全项目共享契约，源头偏差会被放大）与 T9（AgentLoop——消费五个接口的整合任务，spec 最模糊的行为全部在此显形）。选择理由本身即是对计划结构的有效确认。
+
+### 6.3 它在哪里暂停并提问（20 个暂停点摘要）
+
+| 级别 | 编号 | 问题 |
+|---|---|---|
+| 阻塞 | P1 | T9 反馈测试 flat 脚本与循环语义矛盾：断言 `feedbackFailures===1` 实际必为 3，按字面永远 RED |
+| 阻塞 | P2 | demo1 断言 `requests===1`，但 deny 后循环继续，实际 5 次请求 |
+| 阻塞 | P3 | T10 `.env` fixture 路径错误（`envDir:"."`），测试必红 |
+| 阻塞 | P4 | T19 依赖不进 git 的基线文档，冷启动 agent 只能靠附录 A 转述 |
+| 重要 | P5 | SPEC 状态"待用户审阅"与 PLAN 已排期矛盾（流程合规性疑问） |
+| 重要 | P6 | SPEC 首版工具含 run_test/lint/typecheck，PLAN 只实现 3 个 |
+| 重要 | P7 | skills 注入与 read_skill 在 PLAN 中无 task 落地 |
+| 重要 | P8 | feedbackFailures 重置逻辑缺失 |
+| 重要 | P9 | interrupt/aborted 全计划零覆盖 |
+| 重要 | P10 | ProviderError 退避体系零实现 |
+| 重要 | P11 | Redacted 包装类型从未定义 |
+| 重要 | P12 | Session.createdAt/updatedAt 字段 SPEC/PLAN 不一致（T13 用 as any 兜底） |
+| 重要 | P13 | permission 理由硬编码 "policy"，命中规则丢失 |
+| 重要 | P14 | headless "安全默认"语义歧义（默认 allow 与 deny 安全后果相反） |
+| 重要 | P15 | 并行组 B "十者互不依赖"与 Interfaces 依赖声明矛盾 |
+| 轻微 | P16 | 事件携带 partId 但 Part 无 id 字段 |
+| 轻微 | P17 | Ink 无 opacity prop，TS strict 下 JSX 报错 |
+| 轻微 | P18 | T14 bash runner 用 stdout 真值判断 exitCode，丢弃真实退出码 |
+| 轻微 | P19 | Thought title 全链路无数据源 |
+| 轻微 | P20 | new/list/resume、--model/--provider 无实现 task |
+
+### 6.4 暴露的 spec 缺陷（分类）
+
+- **缺失信息**：skills 注入悬空、interrupt 无覆盖、错误处理体系缺失、ContextUsage 无更新点、工程配置（tsconfig/jsx/workspace 依赖）内容未规定等 10 项。
+- **内部矛盾**：计划自审"无缺口"与事实矛盾、并行组声明矛盾、T9 测试 3/实现矛盾、T17 demo1 与循环语义矛盾、不可变性承诺与原地 push 矛盾等 10 项。
+- **歧义**：headless 安全默认、ChatRequest 类型、签名键序、验证命令"检测"、PermissionPart.decision 写入时机等 6 项。
+- **过度/不足规定**：性能条款无豁免声明、T16 仅 prose、demo2/3 仅"同构"等 7 项。
+
+### 6.5 与主 agent 原意的解读差异（是 spec 写错还是它读错？）
+
+| 差异 | 判定 |
+|---|---|
+| deny 后循环继续（P2） | **spec/plan 写错**——SPEC §5.2 明言"拒绝不作为失败回灌"，但未规定"拒绝后终止循环"，PLAN 实现与 demo 断言自相矛盾 |
+| 反馈测试 flat 脚本（P1） | **plan 写错**——MockProvider 的 flat/嵌套语义未被计划作者自己走查 |
+| 并行组依赖（P15） | **plan 写错**——依赖图与 Interfaces 区块两套说法 |
+| skills 注入悬空（P7） | **plan 漏写**——SPEC §3.6 有完整条款 |
+| headless 默认（P14） | **spec 歧义**——两种解读都说得通，安全后果相反 |
+| ChatRequest 类型（C2） | **spec 与 plan 都有理，缺声明**——PLAN 的 ChatMessage[] 是合理设计，但 SPEC 未同步 |
+
+判定结论：**约六成问题是 spec/plan 写错或漏写，而非智能体读错**——这正是冷启动验证的价值。
+
+### 6.6 产出与预期差距
+
+主观评估：陌生 agent 字面推进上限约 **60%**。11 个 task 可机械执行；4 个可推进但有不确定性；4 个会卡住（T9/T10/T15/T17 的计划内矛盾）；T19 无法独立完成（外部文档依赖）。
+
+### 6.7 据此对 SPEC / PLAN 的修订（关键 diff）
+
+**SPEC.md（v1.0 → v1.1）**：
+- 状态行：`待用户审阅` → `已批准（含冷启动验证修订 v1.1）`
+- §3.1：`messages: Part[]` → `messages: ChatMessage[]`（+转换职责说明）
+- §3.3：工具清单收敛为 read/write/bash（run_* 归 VerifyRunner，消除与 §3.5 的重叠）
+- §3.4：新增 headless 默认 deny + 稳定键序签名两条边界条件
+- §3.5：验证命令 `ITERUM_TEST_CMD`/默认 `bun test`（消除"检测"歧义）
+- 新增 **附录 B：SPEC↔PLAN 差异登记表**（B.1 十九项 M1 已修订 + B.2 十八项 M2 后置清单）
+
+**PLAN.md（v1.0 → v1.1）**（19 处修订，全部对应附录 B.1）：
+- T1 补 tsconfig（react-jsx）、tui/cli package.json、@types/bun、commit 清单
+- T3 Session 补 createdAt/updatedAt（T13 去 as any）
+- T7 gateway 返回 `{decision, rule}` + 稳定键序签名 + 新增测试
+- T8 Feedback 补 tool 字段（formatFeedback 同步）
+- T9：测试 3 改嵌套脚本、deny 后 break、run() 开头清零计数、PermissionPart.decision 回填、求助消息含失败摘要、systemPrompt 接入 skills、feedback 带工具名、新增"重置"测试、render 内联单文件
+- T10：envDir 改 fixtures 路径
+- T11：新增 buildSkillSection + ReadSkillTool 及测试（D12）
+- T13：SessionSummary 替代强转
+- T14：headless 默认 deny + `--allow`、bash runner 真实 exitCode、ITERUM_TEST_CMD、SkillCatalog/ReadSkillTool 组装
+- T15：opacity prop → dimColor
+- T16：Step 3 prose → 完整代码
+- T17：demo2/demo3 补完整断言脚本
+- 依赖图与并行组重排（B1/B2 两波）
+- 自审记录重写：诚实声明初版"无缺口"被推翻，改为"已知缺口全部登记"
+
+### 6.8 业主裁决记录
+
+- P14 → **headless 默认 deny**（业主选 Recommended）
+- P7 → **M1 补齐** skills 注入与 read_skill（业主选 Recommended）
+- 其余差异 → **批准整体登记表方案**（M1 修订 + M2 后置清单，业主选 Recommended）
+
+---
+
+## 7. 对 brainstorming 技能的反思（人工填写区）
 
 > 以下由项目所有者补充（业务总览要求）：
 > - 技能做得好的地方：

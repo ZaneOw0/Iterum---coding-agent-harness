@@ -1,6 +1,6 @@
 # SPEC.md — Iterum: coding agent harness 设计规格
 
-> 状态：v1.0（brainstorming 完成后产出，待用户审阅）
+> 状态：v1.1（已批准；含冷启动验证修订，修订 diff 见 SPEC_PROCESS.md §6）
 > 上游输入：`../业务总览.md`（项目要求）、`../opencode-tui-design-spec.md`（TUI 设计基线；两文件仅本地保留、不纳入 git）
 > 本文件是 `docs/PLAN.md` 的唯一上游设计依据。
 
@@ -52,7 +52,7 @@ Iterum 要解决的是：**一个 CLI-only 的 coding agent harness，把"agent 
 
 ### 3.1 llm（Provider 层）
 
-- 输入：`ChatRequest { model, messages: Part[], systemPrompt, maxTokens }`。
+- 输入：`ChatRequest { model, messages: ChatMessage[], system, maxTokens }`；`ChatMessage = { role: "user"|"assistant", content: string }`（messages 为序列化后的字符串消息，非 Part 数组——结构化 parts 到 provider 的转换由 agent 层 render 完成）。
 - 行为：`LLMProvider.complete(request) → AsyncIterable<LLMEvent>`（流式）。三个实现：
   - `OpenAIProvider`（官方 SDK，支持 `OPENAI_BASE_URL` 覆盖）
   - `AnthropicProvider`（官方 SDK，支持 `ANTHROPIC_BASE_URL` 覆盖）
@@ -71,7 +71,7 @@ Iterum 要解决的是：**一个 CLI-only 的 coding agent harness，把"agent 
 
 ### 3.3 tools（工具与执行）
 
-- 首版工具：`read_file` / `write_file`（diff 化）/ `bash` / `run_test` / `run_lint` / `run_typecheck`；MCP 工具桥接注册（3.9）。
+- 首版工具：`read_file` / `write_file` / `bash`；验证类命令（test/lint/typecheck）由 VerifyRunner 通道执行（§3.5），不作为独立工具暴露；MCP 工具桥接注册（3.9）。
 - 输入：JSON-Schema 校验的参数。
 - 行为：执行前 `PermissionGateway.check(toolCall)`；执行中产生 `tool_started`（running 态）。
 - 输出：`ToolResult { ok, output, exitCode?, durationMs }`（结构化，TUI 收缩显示，禁止原始 stdout 刷屏）。
@@ -83,12 +83,13 @@ Iterum 要解决的是：**一个 CLI-only 的 coding agent harness，把"agent 
 - 输入：`ToolCall`。
 - 行为：规则引擎两级判定：① 静态黑名单（默认内置：`rm -rf`、`git push --force`、`DROP TABLE`、`chmod -R 777`、`del /s`、删除 `.git` 等，用户可配置扩展）；② 会话级记忆（本会话已批准的同签名动作免问）。
 - 输出：`PermissionDecision = allow | deny | ask`；`ask` 产生 `PermissionRequest{id, tool, reason, riskLevel}`，进入 `PERMISSION_WAIT`，composer 阻塞。
-- 边界条件：headless 模式可配置 `--auto-deny`（CI/脚本安全默认）。
+- 边界条件：headless 模式下危险动作**默认 deny**（无人值守安全默认），显式传 `--allow` 才放行；TUI 模式走交互式 ask。
+- 签名语义：审批记忆的"同签名"= 工具名 + 参数 JSON（**稳定键序**序列化，避免 `{a,b}` 与 `{b,a}` 视为不同签名）。
 - 错误处理：用户拒绝 → 结果 `denied` 返回 agent，**不进入反馈自动重试闭环**。
 
 ### 3.5 feedback（重点维度：客观反馈闭环）
 
-- 输入：一次完成的工具执行结果 + 关联验证配置（默认验证集：项目检测到的 test/lint/typecheck 命令）。
+- 输入：一次完成的工具执行结果 + 验证命令配置（M1 用 `ITERUM_TEST_CMD` 环境变量，未配置时默认 `bun test`；lint/typecheck 验证集为 M2）。
 - 行为：`VerifyRunner.verify(changes)` 运行验证命令；失败时构造结构化 `Feedback`（工具名、退出码、失败断言摘录、受影响文件、完整 diff 引用）注入**下一轮** LLM 消息列表；`session.feedbackFailures++`。
 - 输出：`FeedbackPart{verifier, status, summary, failureIndex}` 持久进 transcript；事件 `feedback_injected`。
 - 边界条件：`feedbackFailures >= 阈值（默认 3，可用 ITERUM_FEEDBACK_THRESHOLD 配置）` → 停手：生成求助消息（已尝试动作清单 + 最后失败摘要）→ IDLE。用户回复后计数重置。
@@ -143,7 +144,7 @@ Iterum 要解决的是：**一个 CLI-only 的 coding agent harness，把"agent 
 
 ### 3.12 cli（入口）
 
-- 输入：`iterum [--headless] [--model x] [--provider x] [--auto-deny] [command]`。
+- 输入：`iterum [--headless] [--mock] [--prompt <text>] [--allow]`（M1 参数集；`--model/--provider/[command]` 为 M2，见附录 B.2 E9）。
 - 行为：组装 core + tui；`--headless` 供 CI/脚本/机制演示。
 - 输出：TUI 或纯文本事件流。
 - 错误处理：未知参数报错退出码 2；`--help` 完整命令文档。
@@ -362,7 +363,7 @@ CredentialEntry { provider, source: "keychain"|"env", status: set|unset }  # 永
 | R1 | Ink 对 Windows 终端（ConPTY/旧 cmd）兼容性差 | TUI 渲染异常 | 预研：Windows Terminal 为主目标，检测降级为纯文本模式（cli 层兜底） |
 | R2 | `bun build --compile` 对 `@napi-rs/keyring` 原生模块打包支持不确定 | 二进制运行崩溃 | PLAN 首个 task 即做打包 spike；备选：改用 `keytar`（deprecated）或打包外部 node 进程 |
 | R3 | Anthropic SDK 与 OpenAI SDK 事件模型差异（reasoning blocks） | provider 抽象泄漏 | `LLMEvent` 统一中间模型（3.1）先行定义并用 mock 锁定 |
-| R4 | VerifyRunner 对"关联验证"的判定（该跑哪些测试）启发式不准确 | 反馈噪声/漏报 | 首版：变更文件就近匹配 + 全量兜底；文档明确启发式边界 |
+| R4 | VerifyRunner 对"关联验证"的判定（该跑哪些测试）启发式不准确 | 反馈噪声/漏报 | M1：单一验证命令（`ITERUM_TEST_CMD`/默认 `bun test`）；M2：变更文件就近匹配 + 全量兜底 |
 | R5 | 阈值 3 次对长任务过于死板 | 过早停手 | 阈值可配置（`ITERUM_FEEDBACK_THRESHOLD`）；用户回复即重置 |
 | R6 | MCP server 生态对 stdio 实现的平台差异 | 工具注册失败 | 连接失败不阻塞主流程（3.9）；demo 用自带最小 MCP server |
 | R7 | 两套 CI 配置维护成本与语义漂移 | 一边 pass 一边 fail | 两者仅做"运行测试"最小集；GitHub Actions 额外负责产物构建 |
@@ -386,3 +387,56 @@ CredentialEntry { provider, source: "keychain"|"env", status: set|unset }  # 永
 10. ✅ footer 低视觉权重 → §3.11
 
 （实现阶段每项附测试/截图证据。）
+
+---
+
+## 附录 B：SPEC↔PLAN 差异登记表（冷启动验证产物）
+
+> 来源：§4.5 冷启动试运行（见 SPEC_PROCESS.md §6）。凡 SPEC 条款未在 PLAN M1 实现者，一律在此登记处置，防止"静默缺口"。
+
+### B.1 M1 已修订项（冷启动发现并修复）
+
+| # | 发现 | 修订 |
+|---|---|---|
+| D1 | T9 反馈测试 flat 脚本与循环语义矛盾 | PLAN 测试改嵌套多轮脚本 |
+| D2 | deny 后循环继续导致 demo1 请求数=5 | T9 改为 deny 后终止本轮循环（break） |
+| D3 | T10 `.env` fixture 路径错误 | 修正为 fixtures 目录 |
+| D4 | 并行组 B 依赖声明矛盾 | 重排为两波（T4/T6 先，T5/T7/T8/T12 后） |
+| D5 | Ink 无 opacity prop | 用 dimColor 实现低权重 |
+| D6 | T14 bash runner 丢弃真实退出码 | 改用 Bun.spawnSync 真实 exitCode |
+| D7 | Session 缺 createdAt/updatedAt，T13 用 as any | T3 补字段，T13 用真实字段 |
+| D8 | feedbackFailures 重置缺失 | T9 每次 run() 开头清零（用户回复即重置） |
+| D9 | PermissionPart.decision 不回填 | T9 deny/allow 后回填 decision |
+| D10 | 求助消息缺失败摘要 | T9 补入最后失败摘要 |
+| D11 | permission 理由硬编码 "policy" | T7 gateway 返回命中规则，T9 用真实 reason/riskLevel |
+| D12 | skills 注入与 read_skill 悬空 | T11 扩展注入 + ReadSkillTool；T9 systemPrompt 接收 skills；T14 组装 |
+| D13 | headless 默认 allow 与"安全默认"相反 | SPEC §3.4 明确默认 deny，显式 `--allow` 放行 |
+| D14 | ChatRequest.messages 类型 SPEC/PLAN 不一致 | SPEC §3.1 对齐 PLAN（ChatMessage[]） |
+| D15 | 签名键序敏感 | SPEC §3.4 明确稳定键序序列化 |
+| D16 | 验证命令"检测"未定义 | SPEC §3.5 明确 ITERUM_TEST_CMD/默认 bun test |
+| D17 | §3.3 工具清单与 VerifyRunner 职责重叠 | SPEC 工具清单收敛为 read/write/bash |
+| D18 | T1 缺 tsconfig/tui-cli package.json 内容 | PLAN T1 补齐工程配置 |
+| D19 | T16 仅 prose、demo2/3 仅"同构" | PLAN 补全代码级步骤 |
+
+### B.2 M2 后置清单（M1 明确豁免，实现前需回看本表）
+
+| # | 条款 | SPEC 出处 | 后置理由 |
+|---|---|---|---|
+| E1 | interrupt（Ctrl+C）停止流 + aborted part 状态 | §3.2/§3.7 | M1 TUI 交互尚简，进程级中断可接受 |
+| E2 | ProviderError 退避重试三件套、NoCredentialsError | §3.1/§6 | M1 错误透传；重试体系 M2 |
+| E3 | Redacted 包装类型 | §4.2/§7 | M1 以纪律约束 + maskKey；包装类型 M2 |
+| E4 | run_lint/run_typecheck 验证集 | §3.5 | M1 仅 test 验证（E4 与 D16 配合） |
+| E5 | 结构化日志 ~/.iterum/logs/ | §4.4 | M2 |
+| E6 | git hooks 高熵扫描、session 目录 0700 | §4.2 | M2 |
+| E7 | 黑名单用户可配置扩展（配置文件加载） | §3.4 | M1 支持构造函数注入规则；配置加载 M2 |
+| E8 | MCP 连接数上限 8、重连退避 | §3.9 | M2 |
+| E9 | `new/list/resume` 命令、`--model/--provider` 参数 | §3.8/§3.12 | M2 |
+| E10 | ContextUsage 实时更新 | §4.4/验收 6 | M1 显示占位 0；M2 从 provider usage 回填 |
+| E11 | ReasoningPart.title 数据源 | §7/US2 | M1 title 可选置空；M2 由 reasoning 签名提供 |
+| E12 | 失败计数 UI 落点 | US6 | M2（FeedbackPart 已可见） |
+| E13 | 性能条款（<16ms、1000+ part 虚拟化） | §4.1 | M1 全量渲染；虚拟化 M2 |
+| E14 | write_file diff 化 | §3.3 | M1 全量写入；diff 记录 M2 |
+| E15 | Feedback 完整字段（diff 引用） | §3.5 | M1 含工具名+摘要+受影响文件；diff 引用 M2 |
+| E16 | oxlint | §9 | M2 |
+| E17 | 黑名单"删除 .git"规则 | §3.4 | M2 补 pattern |
+| E18 | partId 事件定位（Part.id） | §3.7 | M1 partId 恒空串，TUI 按消息级重渲染 |

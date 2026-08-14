@@ -58,7 +58,7 @@ make test
 ```bash
 iterum                          # 启动 TUI（当前工作目录为 workspace）
 iterum --headless --prompt "..." # 无头模式，事件流 JSON 行输出（CI/脚本）
-iterum --auto-deny ...           # headless 下危险动作一律拒绝（CI 安全默认）
+iterum --allow ...               # headless 默认拒绝危险动作（安全默认），--allow 显式放行
 ```
 
 启动后常用命令：`/connect`（凭据录入/查看/更新/清除）、`/status`（provider/model/MCP/上下文状态）、`/model`（模型选择 dialog）。
@@ -123,7 +123,7 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 
 - key **绝不**硬编码、绝不进 git（含历史）、绝不写日志 / 错误信息 / 事件流 / transcript；仅存在于 OS 钥匙串或 `.env`（明示风险）。
 - 会话文件（`~/.iterum/sessions/`）不含 key，目录权限 0700。
-- 危险 shell 命令默认触发审批（黑名单规则引擎，可配置扩展）；`--auto-deny` 供无人值守场景。
+- 危险 shell 命令默认触发审批（黑名单规则引擎，可配置扩展）；headless 默认拒绝，`--allow` 显式放行（无人值守安全默认）。
 - 完整威胁模型与对策见 `docs/SPEC.md` §4.2。
 
 ## 已知限制

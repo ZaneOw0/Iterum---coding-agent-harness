@@ -82,6 +82,51 @@ export function coreVersion(): string {
 }
 ```
 
+`packages/tui/package.json`：
+
+```json
+{
+  "name": "@iterum/tui",
+  "version": "0.1.0",
+  "module": "src/App.tsx",
+  "dependencies": { "ink": "^5.2.0", "react": "^19.0.0", "@iterum/core": "workspace:*" },
+  "devDependencies": { "ink-testing-library": "^4.0.0", "@types/react": "^19.0.0" }
+}
+```
+
+`packages/cli/package.json`：
+
+```json
+{
+  "name": "@iterum/cli",
+  "version": "0.1.0",
+  "module": "src/main.ts",
+  "dependencies": { "@iterum/core": "workspace:*" }
+}
+```
+
+根 `tsconfig.json`（含 react-jsx 配置，T15 的 .tsx 测试依赖）：
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["@types/bun"],
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["packages/**/*.ts", "packages/**/*.tsx", "demos/**/*.ts", "spikes/**/*.ts"]
+}
+```
+
+```bash
+bun add -d @types/bun
+```
+
 `Makefile`：
 
 ```makefile
@@ -107,7 +152,7 @@ Expected: PASS（1 passed）
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json tsconfig.json packages/core Makefile .gitignore
+git add package.json tsconfig.json bun.lock packages/core packages/tui/package.json packages/cli/package.json Makefile .gitignore
 git commit -m "feat(workspace): bun workspace scaffold with make test"
 ```
 
@@ -189,6 +234,7 @@ export interface Message { id: string; role: "user" | "assistant"; parts: Part[]
 export interface ContextUsage { inputTokens: number; outputTokens: number; reasoningTokens: number; costUsd: number; contextPercent: number }
 export interface Session {
   id: string; cwd: string; title: string; provider: string; model: string
+  createdAt: Date; updatedAt: Date
   messages: Message[]; contextUsage: ContextUsage
   permissionDecisions: Map<string, "allow" | "deny">
   feedbackFailures: number
@@ -230,6 +276,8 @@ describe("transcript", () => {
     const s = createSession({ cwd: "C:/proj", title: "t", provider: "openai", model: "gpt-4o" })
     expect(s.messages.length).toBe(0)
     expect(s.feedbackFailures).toBe(0)
+    expect(s.createdAt).toBeInstanceOf(Date)
+    expect(s.updatedAt).toBeInstanceOf(Date)
   })
 })
 ```
@@ -247,7 +295,8 @@ import type { Message, Part, Session } from "./types"
 
 export function createSession(opts: { cwd: string; title: string; provider: string; model: string }): Session {
   return {
-    id: crypto.randomUUID(), ...opts, messages: [],
+    id: crypto.randomUUID(), ...opts, createdAt: new Date(), updatedAt: new Date(),
+    messages: [],
     contextUsage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, costUsd: 0, contextPercent: 0 },
     permissionDecisions: new Map(), feedbackFailures: 0,
   }
@@ -634,6 +683,7 @@ git commit -m "feat(core): tool interface, registry, fs and bash tools"
 // packages/core/src/permission/types.ts
 export type PermissionDecision = "allow" | "deny" | "ask"
 export interface PermissionRule { pattern: RegExp; reason: string; riskLevel: "low" | "high" }
+export interface PermissionCheckResult { decision: PermissionDecision; rule?: PermissionRule }
 ```
 
 - [ ] **Step 1: 写失败测试**
@@ -646,24 +696,26 @@ import { PermissionGateway, defaultRules } from "../src/permission/gateway"
 const gw = () => new PermissionGateway(defaultRules)
 
 describe("PermissionGateway", () => {
-  test("dangerous bash commands ask", () => {
+  test("dangerous bash commands ask and expose the matched rule", () => {
     for (const cmd of ["rm -rf /", "git push --force origin main", "DROP TABLE users", "chmod -R 777 ."]) {
-      expect(gw().check({ name: "bash", args: { command: cmd } }, new Map())).toBe("ask")
+      const res = gw().check({ name: "bash", args: { command: cmd } }, new Map())
+      expect(res.decision).toBe("ask")
+      expect(res.rule).toBeDefined()
     }
   })
 
   test("safe operations allow by default", () => {
-    expect(gw().check({ name: "read_file", args: { path: "a.ts" } }, new Map())).toBe("allow")
-    expect(gw().check({ name: "bash", args: { command: "bun test" } }, new Map())).toBe("allow")
+    expect(gw().check({ name: "read_file", args: { path: "a.ts" } }, new Map()).decision).toBe("allow")
+    expect(gw().check({ name: "bash", args: { command: "bun test" } }, new Map()).decision).toBe("allow")
   })
 
   test("session memory: previously allowed signature skips ask", () => {
     const call = { name: "bash", args: { command: "rm -rf build" } }
     const g = gw()
-    expect(g.check(call, new Map())).toBe("ask")
+    expect(g.check(call, new Map()).decision).toBe("ask")
     const mem = new Map<string, "allow" | "deny">()
     mem.set(g.signature(call), "allow")
-    expect(g.check(call, mem)).toBe("allow")
+    expect(g.check(call, mem).decision).toBe("allow")
   })
 
   test("denied in memory returns deny", () => {
@@ -671,7 +723,13 @@ describe("PermissionGateway", () => {
     const g = gw()
     const mem = new Map<string, "allow" | "deny">()
     mem.set(g.signature(call), "deny")
-    expect(g.check(call, mem)).toBe("deny")
+    expect(g.check(call, mem).decision).toBe("deny")
+  })
+
+  test("signature is stable regardless of key order", () => {
+    const g = gw()
+    expect(g.signature({ name: "bash", args: { a: 1, b: 2 } }))
+      .toBe(g.signature({ name: "bash", args: { b: 2, a: 1 } }))
   })
 })
 ```
@@ -699,17 +757,23 @@ export const defaultRules: PermissionRule[] = [
 export class PermissionGateway {
   constructor(private rules: PermissionRule[] = defaultRules) {}
   signature(call: ToolCall): string {
-    return `${call.name}:${JSON.stringify(call.args)}`
+    return `${call.name}:${stableStringify(call.args)}`
   }
-  check(call: ToolCall, memory: Map<string, "allow" | "deny">): PermissionDecision {
+  check(call: ToolCall, memory: Map<string, "allow" | "deny">): PermissionCheckResult {
     const remembered = memory.get(this.signature(call))
-    if (remembered) return remembered
+    if (remembered) return { decision: remembered }
     if (call.name === "bash") {
       const cmd = String(call.args.command ?? "")
-      for (const rule of this.rules) if (rule.pattern.test(cmd)) return "ask"
+      for (const rule of this.rules) if (rule.pattern.test(cmd)) return { decision: "ask", rule }
     }
-    return "allow"
+    return { decision: "allow" }
   }
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`
+  return `{${Object.keys(value as object).sort().map(k => `${JSON.stringify(k)}:${stableStringify((value as any)[k])}`).join(",")}}`
 }
 ```
 
@@ -742,7 +806,7 @@ git commit -m "feat(core): permission gateway with dangerous command rules and s
 // packages/core/src/feedback/types.ts
 export interface ChangedFile { path: string; action: "write" | "delete" }
 export interface Feedback {
-  verifier: string; status: "pass" | "fail"; exitCode?: number
+  verifier: string; tool?: string; status: "pass" | "fail"; exitCode?: number
   summary: string; affectedFiles: string[]
 }
 ```
@@ -773,8 +837,8 @@ describe("VerifyRunner", () => {
   })
 
   test("feedback text template is deterministic", () => {
-    const f = { verifier: "test", status: "fail" as const, exitCode: 1, summary: "1 failed", affectedFiles: ["a.ts"] }
-    expect(formatFeedback(f)).toContain("[feedback] verifier=test status=fail exitCode=1")
+    const f = { verifier: "test", tool: "write_file", status: "fail" as const, exitCode: 1, summary: "1 failed", affectedFiles: ["a.ts"] }
+    expect(formatFeedback(f)).toContain("[feedback] verifier=test tool=write_file status=fail exitCode=1")
     expect(formatFeedback(f)).toContain("affectedFiles: a.ts")
   })
 })
@@ -806,7 +870,7 @@ export class VerifyRunner {
 }
 
 export function formatFeedback(f: Feedback): string {
-  return `[feedback] verifier=${f.verifier} status=${f.status} exitCode=${f.exitCode ?? ""}\nsummary:\n${f.summary}\naffectedFiles: ${f.affectedFiles.join(", ")}`
+  return `[feedback] verifier=${f.verifier}${f.tool ? ` tool=${f.tool}` : ""} status=${f.status} exitCode=${f.exitCode ?? ""}\nsummary:\n${f.summary}\naffectedFiles: ${f.affectedFiles.join(", ")}`
 }
 ```
 
@@ -829,10 +893,10 @@ git commit -m "feat(core): verify runner with normalized feedback loop"
 **目标：** 组装 provider/tools/permission/verify 为完整循环（SPEC §3.2、§5.3；演示②③的基础）。
 
 **涉及文件：**
-- Create: `packages/core/src/agent/loop.ts`、`packages/core/src/agent/render.ts`（parts→ChatMessage 序列化）、`packages/core/test/agent.test.ts`
+- Create: `packages/core/src/agent/loop.ts`（render 序列化内联为私有方法，单文件）、`packages/core/test/agent.test.ts`
 
 **Interfaces:**
-- Consumes: T3（Session/SessionEvent/Part）、T4（LLMProvider）、T6（ToolRegistry/ToolCall）、T7（PermissionGateway/PermissionDecision）、T8（VerifyRunner/formatFeedback）。
+- Consumes: T3（Session/SessionEvent/Part）、T4（LLMProvider）、T6（ToolRegistry/ToolCall）、T7（PermissionGateway/PermissionCheckResult）、T8（VerifyRunner/formatFeedback）、T11（Skill/buildSkillSection）。
 - Produces: `AgentLoop`：
 
 ```ts
@@ -842,6 +906,7 @@ export interface AgentDeps {
   permissions: PermissionGateway
   verify: VerifyRunner
   resolvePermission: (req: PermissionRequest) => Promise<"allow" | "deny">
+  skills?: Skill[]            // T11 产物；description 注入 system prompt
   maxTurns?: number          // 默认 5
   feedbackThreshold?: number // 默认 3
 }
@@ -908,9 +973,9 @@ describe("AgentLoop", () => {
     }
     const reg = new ToolRegistry(); reg.register(fakeTool)
     const failVerify = new VerifyRunner("test", async () => ({ exitCode: 1, output: "FAIL auth.test.ts\n1 failed" }))
+    // 嵌套多轮脚本：第 1 轮 tool+text，第 2 轮空脚本 → 无工具调用即结束
     const provider = new MockProvider([
-      { type: "tool", name: "fake", args: { path: "src/auth.ts" } },
-      { type: "text", text: "fixed" },
+      [{ type: "tool", name: "fake", args: { path: "src/auth.ts" } }, { type: "text", text: "fixed" }],
     ])
     const loop = new AgentLoop({ provider, tools: reg, permissions: new PermissionGateway(), verify: failVerify, resolvePermission: alwaysAllow })
     const s = createSession({ cwd: "C:/proj", title: "t", provider: "mock", model: "mock" })
@@ -920,6 +985,24 @@ describe("AgentLoop", () => {
     const secondRequest = provider.requests[1]
     expect(secondRequest.messages.some(m => m.content.includes("[feedback] verifier=test status=fail"))).toBe(true)
     expect(s.messages.flatMap(m => m.parts).some(p => p.type === "feedback" && p.status === "fail")).toBe(true)
+  })
+
+  test("feedback failures reset on each new run (user reply resets counter)", async () => {
+    const fakeTool: Tool = {
+      name: "fake", description: "fake",
+      execute: async () => ({ ok: true, output: "edited", durationMs: 1 }),
+    }
+    const reg = new ToolRegistry(); reg.register(fakeTool)
+    const failVerify = new VerifyRunner("test", async () => ({ exitCode: 1, output: "FAIL" }))
+    const mkLoop = () => new AgentLoop({
+      provider: new MockProvider([[{ type: "tool", name: "fake", args: {} }, { type: "text", text: "t" }]]),
+      tools: reg, permissions: new PermissionGateway(), verify: failVerify, resolvePermission: alwaysAllow,
+    })
+    const s = createSession({ cwd: "C:/proj", title: "t", provider: "mock", model: "mock" })
+    await drain(mkLoop(), s, "try once")
+    expect(s.feedbackFailures).toBe(1)
+    await drain(mkLoop(), s, "try again")
+    expect(s.feedbackFailures).toBe(1) // 第二次 run 开头清零后仅累计 1
   })
 
   test("three consecutive failures trigger threshold stop with help message", async () => {
@@ -944,7 +1027,7 @@ describe("AgentLoop", () => {
     expect(lastMsg.parts.some(p => p.type === "text" && p.text.includes("help"))).toBe(true)
   })
 
-  test("permission ask invokes resolvePermission; deny does NOT enter feedback retry", async () => {
+  test("permission ask invokes resolvePermission; deny breaks loop and does NOT enter feedback retry", async () => {
     const fakeTool: Tool = {
       name: "bash", description: "bash",
       execute: async () => ({ ok: true, output: "never", durationMs: 1 }),
@@ -961,8 +1044,11 @@ describe("AgentLoop", () => {
     const events = await drain(loop, s, "delete it")
     expect(asked).toBe(true)
     expect(events.some(e => e.type === "permission_requested")).toBe(true)
+    expect(provider.requests.length).toBe(1) // deny 后终止循环，不再请求 LLM
     const toolParts = s.messages.flatMap(m => m.parts).filter(p => p.type === "tool")
     expect(toolParts[0]).toMatchObject({ state: "error" })
+    const permPart = s.messages.flatMap(m => m.parts).find(p => p.type === "permission")
+    expect(permPart).toMatchObject({ decision: "deny" }) // decision 回填
     expect(events.some(e => e.type === "feedback_injected")).toBe(false)
   })
 })
@@ -979,10 +1065,9 @@ Expected: FAIL
 // packages/core/src/agent/loop.ts
 import type { LLMProvider } from "../llm/types"
 import type { ToolRegistry } from "../tools/types"
-import type { PermissionDecision } from "../permission/types"
 import { PermissionGateway } from "../permission/gateway"
 import { VerifyRunner, formatFeedback } from "../feedback/verify"
-import { appendPart, createSession as _unused } from "../transcript/session"
+import { buildSkillSection, type Skill } from "../memory/skills"
 import type { Message, PermissionRequest, Session, SessionEvent, ToolPart } from "../transcript/types"
 
 export interface AgentDeps {
@@ -991,6 +1076,7 @@ export interface AgentDeps {
   permissions: PermissionGateway
   verify: VerifyRunner
   resolvePermission: (req: PermissionRequest) => Promise<"allow" | "deny">
+  skills?: Skill[]
   maxTurns?: number
   feedbackThreshold?: number
 }
@@ -1004,6 +1090,7 @@ export class AgentLoop {
   }
 
   async *run(session: Session, userInput: string): AsyncIterable<SessionEvent> {
+    session.feedbackFailures = 0 // 用户回复即重置计数（SPEC §3.5）
     session.messages = [...session.messages, { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: userInput }], time: { start: 0, end: 0 } }]
 
     for (let turn = 0; turn < this.maxTurns; turn++) {
@@ -1017,6 +1104,9 @@ export class AgentLoop {
       }
 
       let hadToolCall = false
+      let deniedThisTurn = false
+      let lastToolName: string | undefined
+      let lastFailedSummary = ""
       for await (const ev of this.deps.provider.complete(req)) {
         if (ev.type === "text_delta") {
           const last = assistant.parts.at(-1)
@@ -1030,24 +1120,32 @@ export class AgentLoop {
           yield { type: "reasoning_delta", messageId: assistant.id, partId: "", text: ev.text }
         } else if (ev.type === "tool_call") {
           hadToolCall = true
+          lastToolName = ev.name
           const part: ToolPart = { type: "tool", tool: ev.name, args: ev.args, state: "running", time: { start: Date.now(), end: 0 } }
           assistant.parts.push(part)
           yield { type: "tool_started", messageId: assistant.id, partId: "", tool: ev.name, args: ev.args }
 
-          const decision = this.deps.permissions.check({ name: ev.name, args: ev.args }, session.permissionDecisions)
-          if (decision === "ask") {
-            const request: PermissionRequest = { id: crypto.randomUUID(), tool: ev.name, args: ev.args, reason: "policy", riskLevel: "high" }
+          const check = this.deps.permissions.check({ name: ev.name, args: ev.args }, session.permissionDecisions)
+          if (check.decision === "ask") {
+            const request: PermissionRequest = {
+              id: crypto.randomUUID(), tool: ev.name, args: ev.args,
+              reason: check.rule?.reason ?? "policy", riskLevel: check.rule?.riskLevel ?? "high",
+            }
             assistant.parts.push({ type: "permission", request })
             yield { type: "permission_requested", partId: "", request }
             const answer = await this.deps.resolvePermission(request)
             session.permissionDecisions.set(this.deps.permissions.signature({ name: ev.name, args: ev.args }), answer)
+            const permPart = assistant.parts.find(p => p.type === "permission")
+            if (permPart?.type === "permission") permPart.decision = answer
             if (answer === "deny") {
               part.state = "error"; part.result = { ok: false, output: "denied by user", durationMs: 0 }
-              continue
+              deniedThisTurn = true
+              break // 拒绝后终止本轮循环：不重试、不进入反馈闭环（SPEC §3.4/§5.2）
             }
-          } else if (decision === "deny") {
+          } else if (check.decision === "deny") {
             part.state = "error"; part.result = { ok: false, output: "denied by policy", durationMs: 0 }
-            continue
+            deniedThisTurn = true
+            break
           }
 
           const tool = this.deps.tools.get(ev.name)
@@ -1060,17 +1158,20 @@ export class AgentLoop {
       }
       assistant.time.end = Date.now()
 
+      if (deniedThisTurn) break // 拒绝后的轮次不做验证回灌
+
       const changed = assistant.parts.filter(p => p.type === "tool" && p.result?.ok).map(p => ({
         path: String((p.args as any).path ?? ""), action: "write" as const,
       }))
       if (changed.length > 0) {
-        const feedback = await this.deps.verify.verify(changed)
+        const feedback = { ...(await this.deps.verify.verify(changed)), tool: lastToolName }
         if (feedback.status === "fail") {
           session.feedbackFailures += 1
+          lastFailedSummary = feedback.summary
           assistant.parts.push({ type: "feedback", verifier: feedback.verifier, status: "fail", summary: feedback.summary, failureIndex: session.feedbackFailures })
           yield { type: "feedback_injected", partId: "", verifier: feedback.verifier, status: "fail", summary: feedback.summary, failureIndex: session.feedbackFailures }
           if (session.feedbackFailures >= this.threshold) {
-            assistant.parts.push({ type: "text", text: `I've failed verification ${session.feedbackFailures} times in a row. help — please review my attempts:\n${assistant.parts.filter(p => p.type === "tool").map(p => `${(p as ToolPart).tool} ${JSON.stringify((p as ToolPart).args)}`).join("\n")}` })
+            assistant.parts.push({ type: "text", text: `I've failed verification ${session.feedbackFailures} times in a row. help — please review my attempts:\n${assistant.parts.filter(p => p.type === "tool").map(p => `${(p as ToolPart).tool} ${JSON.stringify((p as ToolPart).args)}`).join("\n")}\nlast failure: ${lastFailedSummary}` })
             break
           }
           continue
@@ -1083,7 +1184,7 @@ export class AgentLoop {
   }
 
   private systemPrompt(session: Session): string {
-    return `You are Iterum, a coding agent. cwd: ${session.cwd}. Use tools to act; verification results will be fed back to you.`
+    return `You are Iterum, a coding agent. cwd: ${session.cwd}. Use tools to act; verification results will be fed back to you.${this.deps.skills?.length ? `\n${buildSkillSection(this.deps.skills)}` : ""}`
   }
 
   private render(m: Message): string {
@@ -1130,6 +1231,7 @@ git commit -m "feat(core): agent loop with feedback injection and threshold stop
 ```ts
 // packages/core/test/credentials.test.ts
 import { describe, expect, test, mock, beforeEach } from "bun:test"
+import { join } from "node:path"
 
 const mem = new Map<string, string>()
 mock.module("@napi-rs/keyring", () => ({
@@ -1162,7 +1264,7 @@ describe("CredentialStore", () => {
   })
 
   test("env fallback loads .env and marks source", async () => {
-    const store = new CredentialStore({ envDir: ".", envFile: "test.env" })
+    const store = new CredentialStore({ envDir: join(import.meta.dir, "fixtures"), envFile: "test.env" })
     const got = await store.get("openai")
     expect(got?.source).toBe("env")
   })
@@ -1251,23 +1353,23 @@ git add packages/core/src/credentials packages/core/test/credentials.test.ts pac
 git commit -m "feat(core): credential store with os keychain and env fallback"
 ```
 
-### Task 11: core/memory — SKILL.md 发现与注入
+### Task 11: core/memory — SKILL.md 发现、注入与 read_skill 工具
 
-**目标：** 双级 skills 发现（SPEC §3.6）；description 注入、正文按需读取。
+**目标：** 双级 skills 发现（SPEC §3.6）；description 注入 system prompt（`buildSkillSection`）、正文经 `read_skill` 工具按需读取（验收标准 7 的断言路径）。
 
 **涉及文件：**
 - Create: `packages/core/src/memory/skills.ts`、`packages/core/test/memory.test.ts`、`packages/core/test/fixtures/global-skills/write-tests/SKILL.md`、`packages/core/test/fixtures/project-skills/deploy/SKILL.md`
 
 **Interfaces:**
-- Consumes: 无。
-- Produces: `Skill { name; description; body; source }`、`SkillCatalog.discover(globalDir, projectDir): Skill[]`（项目级覆盖全局级同名）（T9 的 systemPrompt 后续集成，T14 依赖）。
+- Consumes: T6 `Tool`/`ToolCall`/`ToolResult`。
+- Produces: `Skill { name; description; body; source }`、`SkillCatalog.discover(globalDir, projectDir): Skill[]`（项目级覆盖全局级同名）、`buildSkillSection(skills: Skill[]): string`、`ReadSkillTool`（实现 `Tool`，T9 systemPrompt 与 T14 组装依赖）。
 
 - [ ] **Step 1: 写失败测试**
 
 ```ts
 // packages/core/test/memory.test.ts
 import { describe, expect, test } from "bun:test"
-import { SkillCatalog } from "../src/memory/skills"
+import { SkillCatalog, buildSkillSection, ReadSkillTool } from "../src/memory/skills"
 import { join } from "node:path"
 
 const fixtures = join(import.meta.dir, "fixtures")
@@ -1289,6 +1391,36 @@ describe("SkillCatalog", () => {
     expect(deploy[0].source).toBe("project")
   })
 })
+
+describe("buildSkillSection", () => {
+  test("renders name and description per skill", () => {
+    const out = buildSkillSection([{ name: "write-tests", description: "Write failing tests first", body: "x", source: "global" }])
+    expect(out).toContain("## Skills")
+    expect(out).toContain("write-tests")
+    expect(out).toContain("Write failing tests first")
+  })
+
+  test("empty list returns empty string", () => {
+    expect(buildSkillSection([])).toBe("")
+  })
+})
+
+describe("ReadSkillTool", () => {
+  test("returns skill body on demand (not in system prompt)", async () => {
+    const catalog = SkillCatalog.discover(join(fixtures, "global-skills"), join(fixtures, "project-skills"))
+    const tool = new ReadSkillTool(catalog)
+    expect(tool.name).toBe("read_skill")
+    const res = await tool.execute({ name: "read_skill", args: { name: "write-tests" } })
+    expect(res.ok).toBe(true)
+    expect(res.output).toContain("## Instructions")
+  })
+
+  test("unknown skill returns ok:false", async () => {
+    const tool = new ReadSkillTool([])
+    const res = await tool.execute({ name: "read_skill", args: { name: "nope" } })
+    expect(res.ok).toBe(false)
+  })
+})
 ```
 
 fixture `global-skills/write-tests/SKILL.md` 与 `project-skills/deploy/SKILL.md`（含 name/description frontmatter + 正文；deploy 同时出现在两目录验证覆盖）。
@@ -1304,6 +1436,8 @@ Expected: FAIL
 // packages/core/src/memory/skills.ts
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs"
 import { join } from "node:path"
+import type { Tool, ToolCall } from "../tools/types"
+import type { ToolResult } from "../transcript/types"
 
 export interface Skill { name: string; description: string; body: string; source: "global" | "project" }
 
@@ -1334,6 +1468,24 @@ export class SkillCatalog {
       out.push({ name: meta.name, description: meta.description ?? "", body: fm[2], source })
     }
     return out
+  }
+}
+
+export function buildSkillSection(skills: Skill[]): string {
+  if (skills.length === 0) return ""
+  return "## Skills\n" + skills.map(s => `- ${s.name}: ${s.description}`).join("\n")
+}
+
+export class ReadSkillTool implements Tool {
+  name = "read_skill"
+  description = "Read the full body of a registered skill by name"
+  constructor(private skills: Skill[]) {}
+  async execute(call: ToolCall): Promise<ToolResult> {
+    const { name } = call.args as { name: string }
+    const t = Date.now()
+    const skill = this.skills.find(s => s.name === name)
+    if (!skill) return { ok: false, output: `unknown skill: ${name}`, durationMs: Date.now() - t }
+    return { ok: true, output: skill.body, durationMs: Date.now() - t }
   }
 }
 ```
@@ -1467,7 +1619,7 @@ git commit -m "feat(core): stdio mcp client with tool bridging"
 
 **Interfaces:**
 - Consumes: T3 `Session`。
-- Produces: `SessionStore { dir }`、`save(session)`、`load(id)`、`list(): Session[]`（T14 依赖）。
+- Produces: `SessionStore { dir }`、`save(session)`、`load(id)`、`list(): SessionSummary[]`（`SessionSummary = { id: string; title: string; updatedAt: Date }`）（T14 依赖）。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1518,25 +1670,33 @@ import { mkdirSync, existsSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path"
 import type { Session } from "../transcript/types"
 
+export interface SessionSummary { id: string; title: string; updatedAt: Date }
+
 export class SessionStore {
   constructor(private dir: string) { mkdirSync(dir, { recursive: true }) }
   private path(id: string) { return join(this.dir, `${id}.json`) }
 
   save(session: Session): void {
+    session.updatedAt = new Date()
     writeFileSync(this.path(session.id), JSON.stringify({ ...session, permissionDecisions: [...session.permissionDecisions] }, null, 2))
   }
   load(id: string): Session | undefined {
     try {
       const raw = JSON.parse(readFileSync(this.path(id), "utf8"))
       raw.permissionDecisions = new Map(raw.permissionDecisions)
+      raw.createdAt = new Date(raw.createdAt)
+      raw.updatedAt = new Date(raw.updatedAt)
       return raw as Session
     } catch { return undefined }
   }
-  list(): Session[] {
+  list(): SessionSummary[] {
     if (!existsSync(this.dir)) return []
-    return readdirSync(this.dir).filter(f => f.endsWith(".json"))
-      .map(f => { const id = f.slice(0, -5); const s = this.load(id); return s ? { id, title: s.title, updatedAt: (s as any).updatedAt } as Session : undefined })
-      .filter((s): s is Session => !!s)
+    const out: SessionSummary[] = []
+    for (const f of readdirSync(this.dir).filter(f => f.endsWith(".json"))) {
+      const s = this.load(f.slice(0, -5))
+      if (s) out.push({ id: s.id, title: s.title, updatedAt: s.updatedAt })
+    }
+    return out
   }
 }
 ```
@@ -1607,6 +1767,8 @@ Expected: FAIL
 
 ```ts
 // packages/cli/src/main.ts
+import { join } from "node:path"
+import { homedir } from "node:os"
 import { MockProvider } from "@iterum/core/llm/mock"
 import { AgentLoop } from "@iterum/core/agent/loop"
 import { ToolRegistry } from "@iterum/core/tools/registry"
@@ -1614,17 +1776,18 @@ import { BashTool } from "@iterum/core/tools/bash"
 import { ReadFileTool, WriteFileTool } from "@iterum/core/tools/fs"
 import { PermissionGateway } from "@iterum/core/permission/gateway"
 import { VerifyRunner } from "@iterum/core/feedback/verify"
-import { CredentialStore } from "@iterum/core/credentials/store"
+import { SkillCatalog, ReadSkillTool } from "@iterum/core/memory/skills"
 import { createSession } from "@iterum/core/transcript/session"
 
 export async function main(argv: string[]): Promise<number> {
-  if (argv.includes("--help")) { console.log("Usage: iterum [--headless] [--mock] [--prompt <text>] [--auto-deny]"); return 0 }
-  for (const a of argv) if (a.startsWith("-") && !["--headless", "--mock", "--prompt", "--auto-deny"].includes(a)) return 2
+  if (argv.includes("--help")) { console.log("Usage: iterum [--headless] [--mock] [--allow] [--prompt <text>]"); return 0 }
+  for (const a of argv) if (a.startsWith("-") && !["--headless", "--mock", "--prompt", "--allow"].includes(a)) return 2
 
   const headless = argv.includes("--headless")
   const promptIdx = argv.indexOf("--prompt")
   const prompt = promptIdx >= 0 ? argv[promptIdx + 1] : ""
   const mock = argv.includes("--mock")
+  const allowDanger = argv.includes("--allow")
 
   if (!headless) {
     console.log("TUI not yet wired (Task 16); use --headless")
@@ -1636,15 +1799,24 @@ export async function main(argv: string[]): Promise<number> {
 
   const tools = new ToolRegistry()
   tools.register(new ReadFileTool()); tools.register(new WriteFileTool())
-  tools.register(new BashTool(async (cmd, cwd) => Bun.spawnSync({ cmd: ["cmd", "/c", cmd], cwd, stdout: "pipe" }).stdout.toString() ? { exitCode: 0, output: "" } : { exitCode: 1, output: "" }))
-  const verify = new VerifyRunner("bun test", async (cmd, cwd) => {
+  tools.register(new BashTool(async (cmd, cwd) => {
+    const r = Bun.spawnSync({ cmd: ["cmd", "/c", cmd], cwd, stdout: "pipe", stderr: "pipe" })
+    return { exitCode: r.exitCode ?? 1, output: r.stdout.toString() + r.stderr.toString() }
+  }))
+  const skills = SkillCatalog.discover(
+    join(homedir(), ".iterum", "skills"),
+    join(process.cwd(), ".iterum", "skills"),
+  )
+  tools.register(new ReadSkillTool(skills))
+
+  const verify = new VerifyRunner(process.env.ITERUM_TEST_CMD ?? "bun test", async (cmd, cwd) => {
     const r = Bun.spawnSync({ cmd: cmd.split(" "), cwd, stdout: "pipe", stderr: "pipe" })
-    return { exitCode: r.exitCode, output: r.stdout.toString() + r.stderr.toString() }
+    return { exitCode: r.exitCode ?? 1, output: r.stdout.toString() + r.stderr.toString() }
   })
-  const autoDeny = argv.includes("--auto-deny")
+  // headless 默认 deny（安全默认，SPEC §3.4）；--allow 显式放行
   const loop = new AgentLoop({
-    provider, tools, permissions: new PermissionGateway(), verify,
-    resolvePermission: async () => autoDeny ? "deny" : "allow",
+    provider, tools, permissions: new PermissionGateway(), verify, skills,
+    resolvePermission: async () => allowDanger ? "allow" : "deny",
   })
   const session = createSession({ cwd: process.cwd(), title: "headless", provider: "mock", model: "mock" })
   for await (const ev of loop.run(session, prompt)) console.log(JSON.stringify(ev))
@@ -1733,6 +1905,7 @@ export const semanticTheme = {
   text: "white", textMuted: "gray", accent: "cyan", info: "blue",
   success: "green", warning: "yellow", error: "red",
   background: "", border: "gray", borderSubtle: "dim",
+  // thinkingOpacity（≈0.6 视觉权重）：M1 以 dimColor 近似实现，语义保留供 M2 主题系统使用
   thinkingOpacity: 0.6,
 }
 ```
@@ -1754,7 +1927,6 @@ export function Transcript({ session }: { session: Session }) {
 import React, { useState } from "react"
 import { Box, Text } from "ink"
 import type { Message, Part } from "@iterum/core/transcript/types"
-import { semanticTheme } from "../theme"
 
 function PartView({ part }: { part: Part }) {
   if (part.type === "text") return <Text>{part.text}</Text>
@@ -1764,7 +1936,7 @@ function PartView({ part }: { part: Part }) {
     return (
       <Box flexDirection="column">
         <Text dimColor>{open ? "-" : "+"} Thought: {part.title ?? ""} · {dur}s</Text>
-        {open ? <Text color="gray" opacity={semanticTheme.thinkingOpacity as any}>{part.markdown}</Text> : null}
+        {open ? <Text dimColor>{part.markdown}</Text> : null}
       </Box>
     )
   }
@@ -1861,7 +2033,126 @@ Expected: FAIL
 
 - [ ] **Step 3: 最小实现**
 
-`Composer.tsx`（multiline：`useInput` 处理 Enter=换行、Ctrl+Enter=提交；底部 muted 行 `model | 12,400 (24%) · $0.03`）；`Footer.tsx`（左 cwd、右 `△ n Permission • m MCP /status` 或 `Get started /connect`）；`DialogHost.tsx`（esc 取消 / enter 确认的统一视觉语法）；`PermissionDialog.tsx`（三选项：Allow / Deny / Always allow this session）；`Sidebar.tsx`（宽屏 >120 列渲染，内容为 session/workspace 信息）；`App.tsx` 用 `useStdout` 读终端宽度组装五层。
+```tsx
+// packages/tui/src/components/Composer.tsx
+import React, { useState } from "react"
+import { Box, Text } from "ink"
+import { useInput } from "ink"
+
+export interface Usage { tokens: number; percent: number; costUsd: number }
+
+export function Composer({ onSubmit, usage, model }: { onSubmit: (text: string) => void; usage: Usage; model?: string }) {
+  const [text, setText] = useState("")
+  useInput((input, key) => {
+    if (key.ctrl && input === "\r") { onSubmit(text); setText(""); return }
+    if (key.return) { setText(t => t + "\n"); return }
+    if (key.backspace || key.delete) { setText(t => t.slice(0, -1)); return }
+    setText(t => t + input)
+  })
+  return (
+    <Box flexDirection="column" borderStyle="round" paddingX={1}>
+      <Text>❯ {text}</Text>
+      <Text dimColor>{model ?? "model"}  {usage.tokens.toLocaleString()} ({usage.percent}%) · ${usage.costUsd.toFixed(2)}</Text>
+    </Box>
+  )
+}
+```
+
+```tsx
+// packages/tui/src/components/Footer.tsx
+import React from "react"
+import { Box, Text } from "ink"
+
+export function Footer({ cwd, permissionCount, mcpCount, connected = true }: { cwd: string; permissionCount: number; mcpCount: number; connected?: boolean }) {
+  return (
+    <Box justifyContent="space-between" paddingX={1}>
+      <Text dimColor>{cwd}</Text>
+      {connected
+        ? <Text dimColor>△ {permissionCount} Permission  •  {mcpCount} MCP  /status</Text>
+        : <Text color="yellow">Get started /connect</Text>}
+    </Box>
+  )
+}
+```
+
+```tsx
+// packages/tui/src/components/DialogHost.tsx
+import React from "react"
+import { Box, Text } from "ink"
+
+export function DialogHost({ title, children, hint }: { title: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <Box flexDirection="column" borderStyle="double" paddingX={1}>
+      <Text bold>{title}</Text>
+      {children}
+      <Text dimColor>{hint ?? "[Esc] cancel  [Enter] confirm"}</Text>
+    </Box>
+  )
+}
+```
+
+```tsx
+// packages/tui/src/components/PermissionDialog.tsx
+import React from "react"
+import { Text } from "ink"
+import { DialogHost } from "./DialogHost"
+import type { PermissionRequest } from "@iterum/core/transcript/types"
+
+export function PermissionDialog({ request, onDecision }: { request: PermissionRequest; onDecision: (d: "allow" | "deny" | "always") => void }) {
+  return (
+    <DialogHost title={`Permission required — ${request.tool}`} hint="[a] allow  [d] deny  [s] always allow this session">
+      <Text color="yellow">{request.reason} (risk: {request.riskLevel})</Text>
+      <Text dimColor>{JSON.stringify(request.args)}</Text>
+    </DialogHost>
+  )
+}
+```
+
+```tsx
+// packages/tui/src/components/Sidebar.tsx
+import React from "react"
+import { Box, Text } from "ink"
+import type { Session } from "@iterum/core/transcript/types"
+
+export function Sidebar({ session }: { session: Session }) {
+  return (
+    <Box flexDirection="column" width={42} borderStyle="single">
+      <Text bold>Session</Text>
+      <Text dimColor>{session.title}</Text>
+      <Text dimColor>{session.cwd}</Text>
+      <Text dimColor>{session.provider} / {session.model}</Text>
+    </Box>
+  )
+}
+```
+
+```tsx
+// packages/tui/src/App.tsx
+import React from "react"
+import { Box, useStdout } from "ink"
+import type { Session } from "@iterum/core/transcript/types"
+import { Transcript } from "./components/Transcript"
+import { Composer } from "./components/Composer"
+import { Footer } from "./components/Footer"
+import { Sidebar } from "./components/Sidebar"
+
+export function App({ session }: { session: Session }) {
+  const { stdout } = useStdout()
+  const wide = (stdout?.columns ?? 80) > 120
+  return (
+    <Box flexDirection="column">
+      <Box flexDirection="row">
+        {wide ? <Sidebar session={session} /> : null}
+        <Box flexDirection="column" flexGrow={1}>
+          <Transcript session={session} />
+          <Composer onSubmit={() => {}} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={session.model} />
+        </Box>
+      </Box>
+      <Footer cwd={session.cwd} permissionCount={0} mcpCount={0} />
+    </Box>
+  )
+}
+```
 
 - [ ] **Step 4: Run 确认通过**
 
@@ -1927,7 +2218,86 @@ assert(!events.some(e => e.type === "feedback_injected"), "denied action must no
 console.log("PASS demo1: guardrail intercepted dangerous action")
 ```
 
-`demo2-feedback-loop.ts` 同构：工具执行后注入失败（VerifyRunner 返回 exitCode 1），断言 `MockProvider.requests[1]` 的消息包含 `[feedback]` 摘要且 agent 第二轮调用了修复工具。`demo3-threshold-stop.ts` 同构：三轮失败 → 断言 `session.feedbackFailures === 3`、末条 assistant 文本含 `help`、事件以 `session_idle` 收尾。
+```ts
+// demos/demo2-feedback-loop.ts
+import { PermissionGateway } from "@iterum/core/permission/gateway"
+import { MockProvider } from "@iterum/core/llm/mock"
+import { AgentLoop } from "@iterum/core/agent/loop"
+import { ToolRegistry } from "@iterum/core/tools/registry"
+import { VerifyRunner } from "@iterum/core/feedback/verify"
+import { createSession } from "@iterum/core/transcript/session"
+import type { Tool } from "@iterum/core/tools/types"
+
+const editTool: Tool = {
+  name: "edit_file", description: "edit",
+  execute: async () => ({ ok: true, output: "edited", durationMs: 1 }),
+}
+const registry = new ToolRegistry()
+registry.register(editTool)
+
+// 第 1 轮：编辑文件（触发验证失败）；第 2 轮：读到失败反馈后调用修复工具
+const provider = new MockProvider([
+  [{ type: "tool", name: "edit_file", args: { path: "src/auth.ts" } }, { type: "text", text: "edited" }],
+  [{ type: "tool", name: "edit_file", args: { path: "src/auth.ts" } }, { type: "text", text: "fixed for real" }],
+])
+const failOnce = new VerifyRunner("test", async () => ({ exitCode: 1, output: "FAIL auth.test.ts: expected 1, got 2" }))
+const loop = new AgentLoop({
+  provider, tools: registry, permissions: new PermissionGateway(), verify: failOnce,
+  resolvePermission: async () => "allow",
+})
+const session = createSession({ cwd: process.cwd(), title: "demo2", provider: "mock", model: "mock" })
+const events: any[] = []
+for await (const e of loop.run(session, "fix the test")) events.push(e)
+
+const assert = (cond: boolean, msg: string) => { if (!cond) { console.error("FAIL:", msg); process.exit(1) } }
+const secondRequest = provider.requests[1]
+assert(secondRequest !== undefined, "agent made a second request")
+assert(secondRequest.messages.some(m => m.content.includes("[feedback] verifier=test status=fail exitCode=1")), "feedback summary injected into next request")
+assert(secondRequest.messages.some(m => m.content.includes("FAIL auth.test.ts")), "failure detail visible in feedback")
+assert(events.some(e => e.type === "feedback_injected"), "feedback_injected event emitted")
+const toolCalls = session.messages.flatMap(m => m.parts).filter(p => p.type === "tool")
+assert(toolCalls.length === 2, `agent acted twice (edit, then fix), got ${toolCalls.length}`)
+console.log("PASS demo2: feedback loop drove the agent's next action")
+```
+
+```ts
+// demos/demo3-threshold-stop.ts
+import { PermissionGateway } from "@iterum/core/permission/gateway"
+import { MockProvider } from "@iterum/core/llm/mock"
+import { AgentLoop } from "@iterum/core/agent/loop"
+import { ToolRegistry } from "@iterum/core/tools/registry"
+import { VerifyRunner } from "@iterum/core/feedback/verify"
+import { createSession } from "@iterum/core/transcript/session"
+import type { Tool } from "@iterum/core/tools/types"
+
+const editTool: Tool = {
+  name: "edit_file", description: "edit",
+  execute: async () => ({ ok: true, output: "edited", durationMs: 1 }),
+}
+const registry = new ToolRegistry()
+registry.register(editTool)
+
+// flat 脚本：每轮都编辑→验证失败，直到阈值 3 停手
+const provider = new MockProvider([
+  { type: "tool", name: "edit_file", args: { path: "src/a.ts" } },
+  { type: "text", text: "attempt" },
+])
+const alwaysFail = new VerifyRunner("test", async () => ({ exitCode: 1, output: "FAIL a.test.ts" }))
+const loop = new AgentLoop({
+  provider, tools: registry, permissions: new PermissionGateway(), verify: alwaysFail,
+  resolvePermission: async () => "allow",
+})
+const session = createSession({ cwd: process.cwd(), title: "demo3", provider: "mock", model: "mock" })
+const events: any[] = []
+for await (const e of loop.run(session, "make it pass")) events.push(e)
+
+const assert = (cond: boolean, msg: string) => { if (!cond) { console.error("FAIL:", msg); process.exit(1) } }
+assert(session.feedbackFailures === 3, `threshold reached at 3, got ${session.feedbackFailures}`)
+const lastMsg = session.messages.at(-1)!
+assert(lastMsg.parts.some(p => p.type === "text" && p.text.includes("help")), "help request emitted on threshold stop")
+assert(events.at(-1)?.type === "session_idle", "ends with session_idle")
+console.log("PASS demo3: threshold stop after 3 consecutive failures")
+```
 
 - [ ] **Step 2: Run 确认失败（对未实现部分）**
 
@@ -2026,7 +2396,7 @@ git commit -m "feat(dist): single-binary build targets and docker image"
 - Produces: 验收标准 10 的证据文档。
 
 - [ ] **Step 1: README 全量章节**：项目简介、特性、安装（二进制获取/源码 `bun install && make test`）、运行、分发命令（三平台 + docker）、key 安全配置（`/connect` 钥匙串 vs `.env` 风险）、目录结构树、安全边界（§4.2 威胁模型摘要）、已知限制。
-- [ ] **Step 2: TUI MUST 自查**：逐条标注"实现位置 + 测试证据"（如 MUST-3 collapsed reasoning → `ReasoningPartView` + `transcript.test.tsx`）。
+- [ ] **Step 2: TUI MUST 自查**：逐条标注"实现位置 + 测试证据"（如 MUST-3 collapsed reasoning → `ReasoningPartView` + `transcript.test.tsx`）。**基线文档说明**：`opencode-tui-design-spec.md` 仅作者本机保留（不纳入 git），MUST 清单以 `docs/SPEC.md` 附录 A 转述为准；本机人工核对原文，如与附录 A 有出入以原文为准并回填附录 A。
 - [ ] **Step 3: Commit**
 
 ```bash
@@ -2113,38 +2483,45 @@ Expected: 两个平台 job 均绿；GitHub Actions 最后一次执行 pass。
 T1 (scaffold)
 ├─ T2 (spike compile)      [与 T3 并行]
 └─ T3 (transcript types)   ← 一切数据契约
-   ├─ T4 (llm mock) ──────────────┐
-   ├─ T5 (providers) ────────┐    │
-   ├─ T6 (tools) ────────────┤    │
-   ├─ T7 (permission) ───────┤    │
-   ├─ T8 (feedback) ─────────┤    │
-   ├─ T10 (credentials) ────┐│    │
-   ├─ T11 (skills) ─────────┤│    │
-   ├─ T12 (mcp) ────────────┤│    │
-   ├─ T13 (session store) ──┤│    │
-   └─ T15 (tui shell) ──────┤│    │
-                            ▼▼    │
-                        T9 (agent loop) ← T4+T6+T7+T8
-                        ┌───┴────┬──────────┐
-                        ▼        ▼          ▼
-                     T14 (cli) T17 (demos) T16 (tui full) ← T15
-                        │        │          │
-                        ▼        ▼          ▼
-                     T18 (dist)  T20 (CI) ← T19 (docs) ← T16+T18
+   ├─ T4 (llm mock) ─────────────┐
+   ├─ T6 (tools) ────────────────┤ ← T5/T7/T8/T12 的前置
+   ├─ T10 (credentials) ─────────┤
+   ├─ T11 (skills) ──────────────┤
+   ├─ T13 (session store) ───────┤
+   └─ T15 (tui shell) ───────────┤
+                                 ▼
+                 T5 (providers) ← T4
+                 T7 (permission) ← T6
+                 T8 (feedback) ← T6
+                 T12 (mcp) ← T6
+                        │
+                        ▼
+                 T9 (agent loop) ← T4+T6+T7+T8+T11(buildSkillSection)
+                 ┌───┴────┬──────────┐
+                 ▼        ▼          ▼
+              T14 (cli) T17 (demos) T16 (tui full) ← T15
+                 │        │          │
+                 ▼        ▼          ▼
+              T18 (dist)  T20 (CI) ← T19 (docs) ← T16+T18
 ```
 
 - **并行组 A（T1 后）**：T2 ∥ T3。
-- **并行组 B（T3 后，核心模块可开独立 worktree）**：T4、T5、T6、T7、T8、T10、T11、T12、T13、T15 —— 十者互不依赖，可并行（业务总览"每个独立功能/大模块一个 worktree"）。
-- **并行组 C**：T9（需 T4/T6/T7/T8）完成后 → T14、T17、T16 可并行；T14 需 T10/T11/T12/T13。
+- **并行组 B1（T3 后）**：T4、T6、T10、T11、T13、T15 六者互不依赖，可并行（业务总览"每个独立功能/大模块一个 worktree"）。
+- **并行组 B2（B1 后）**：T5（需 T4）、T7/T8/T12（需 T6）可并行。
+- **并行组 C**：T9（需 T4/T6/T7/T8/T11）完成后 → T14（另需 T10/T11/T13）、T17、T16 可并行。
 - **收尾组 D**：T18（需 T14）；T19（需 T16/T18）；T20（需 T17/T19；推送须人工审批）。
+
+> 注：B1/B2 拆分是冷启动验证（SPEC_PROCESS.md §6）发现初版并行声明与 Interfaces 依赖矛盾后的修订。
 
 **测试计数基线**：`make test` 全绿 = 各 task 自身测试 + demos；任何 task 的变更破坏他人测试即视为 Critical，评审必须拦截。
 
 ---
 
-## 自审记录（writing-plans 自检）
+## 自审记录（writing-plans 自检 + 冷启动验证修订）
 
-1. **Spec 覆盖**：SPEC §3.1→T4/T5；§3.2→T9；§3.3→T6；§3.4→T7；§3.5→T8/T9；§3.6→T11；§3.7→T3；§3.8→T13；§3.9→T12；§3.10→T10；§3.11→T15/T16；§3.12→T14；§4 安全→T10/T19；§5 重点维度→T8/T9/T17；§8 分发→T18；验收标准 1-11 均有对应 task（9→T20，10→T19，11→全流程）。无缺口。
-2. **占位符扫描**：无 TBD/TODO；所有实现步骤含真实代码；SDK 精确 API 的两处注记（T12 listTools、T13 list）允许实现期适配，但以测试绿为强制门。
-3. **类型一致性**：`ToolResult/ToolCall/Tool`（T6 定义，T7/T8/T9/T12 消费一致）；`PermissionRequest`（T3 定义，T9 消费）；`formatFeedback`（T8 定义，T9 使用）；`MockProvider` 多轮脚本语义（T4 定义，T9/T17 使用）；`Session.permissionDecisions` 为 `Map`（T3 定义，T7/T13 一致）。核心事件名（`feedback_injected/session_idle/permission_requested`）在 T3/T9/T17 一致。
+> **诚实性声明**：初版自审（v1.0）结论"无缺口"已被 §4.5 冷启动试运行推翻——陌生 subagent 发现 20 个暂停点、10 处内部矛盾（详见 SPEC_PROCESS.md §6）。本节为修订后（v1.1）的如实记录：本计划不保证"零缺口"，但保证"所有已知缺口都有登记与处置"（SPEC 附录 B）。
+
+1. **Spec 覆盖（v1.1）**：SPEC §3.1→T4/T5；§3.2→T9；§3.3→T6；§3.4→T7；§3.5→T8/T9；§3.6→T11；§3.7→T3；§3.8→T13；§3.9→T12；§3.10→T10；§3.11→T15/T16；§3.12→T14；§4 安全→T10/T19；§5 重点维度→T8/T9/T17；§8 分发→T18；验收标准 1-11 均有对应 task（9→T20，10→T19，11→全流程）。M1 未实现的 SPEC 条款全部登记于 SPEC 附录 B.2（E1-E18），逐条标注"M1 豁免 / 后置 M2 / 遗漏"。
+2. **占位符扫描（v1.1）**：无 TBD/TODO；T16 Step 3 已从 prose 补为完整代码；demo2/demo3 已从"同构"补为完整断言脚本；SDK 精确 API 的注记（T12 listTools）允许实现期适配，但以测试绿为强制门。
+3. **类型一致性（v1.1）**：`ToolResult/ToolCall/Tool`（T6 定义，T7/T8/T9/T11/T12 消费一致）；`PermissionRequest`（T3 定义，T9 消费）；`PermissionCheckResult`（T7 定义，T9 消费）；`Skill/buildSkillSection/ReadSkillTool`（T11 定义，T9/T14 消费）；`formatFeedback`（T8 定义，T9 使用）；`Session.createdAt/updatedAt`（T3 定义，T13 消费）；`SessionSummary`（T13 定义）；`MockProvider` 嵌套脚本语义（T4 定义，T9 测试 3/T17 使用）。核心事件名（`feedback_injected/session_idle/permission_requested`）在 T3/T9/T17 一致。T9 测试 3 与实现、demo1 断言与循环语义、T10 fixture 路径、Ink opacity prop 四处硬矛盾已修复（SPEC 附录 B.1 D1-D5）。
 

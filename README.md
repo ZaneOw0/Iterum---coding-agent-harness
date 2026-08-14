@@ -11,7 +11,7 @@ Iterum 是一个 **CLI-only** 的 coding agent（类 Claude Code / opencode）�
 ## 特性
 
 - **Structured transcript**：assistant 消息由 text / reasoning / tool / permission / feedback parts 组成（设计基线 `opencode-tui-design-spec.md`）
-- **反馈闭环（重点维度）**：验证失败自动回灌 + 连续失败阈值（默认 3，`ITERUM_FEEDBACK_THRESHOLD` 可配）停手求助
+- **反馈闭环（重点维度）**：验证失败自动回灌 + 连续失败阈值（默认 3，`AgentLoop` 构造参数 `feedbackThreshold` 可配）停手求助
 - **治理护栏**：危险命令黑名单（rm -rf / force push / DROP TABLE 等，可配置）+ 会话级审批记忆，TUI 阻塞式 Permission Prompt
 - **凭据安全**：OS 钥匙串主存储（Windows 凭据管理器 / macOS Keychain / Linux Secret Service）+ `.env` 回退 + 首录引导（隐藏输入、掩码查看）
 - **自定义 skills**：SKILL.md 双级发现（全局 `~/.iterum/skills` / 项目 `.iterum/skills`），description 常驻注入、正文按需读取
@@ -57,7 +57,7 @@ make test
 
 ```bash
 iterum --headless --mock --prompt "..."   # 无头模式，事件流 JSON 行输出（CI/脚本/机制演示）
-iterum --headless --prompt "..."          # 真实 provider（先配置凭据，见下）
+# 真实 provider 未接线：不加 --mock 会报错退出（exit 1），配置凭据也不会启用——为后续任务（见"已知限制"）
 iterum --allow ...                        # headless 默认拒绝危险动作（安全默认），--allow 显式放行
 iterum connect openai --set               # 凭据录入（隐藏输入）/ --show 掩码查看 / --clear 清除
 ```
@@ -67,7 +67,7 @@ iterum connect openai --set               # 凭据录入（隐藏输入）/ --sh
 
 ### Key 如何安全配置（目标机器）
 
-1. **推荐**：交互终端运行 `iterum connect openai --set`（或 `anthropic`），隐藏输入引导录入（回显 `*`）→ 写入 **OS 钥匙串**（Windows 凭据管理器 / macOS Keychain / Linux Secret Service）。`--show` 仅显示掩码（如 `sk-…ab12`）与来源；`--clear` 清除。脚本/CI 可用 `--from-stdin <key>`（管道注入，不入 history）。
+1. **推荐**：交互终端运行 `iterum connect openai --set`（或 `anthropic`），隐藏输入引导录入（回显 `*`）→ 写入 **OS 钥匙串**（Windows 凭据管理器 / macOS Keychain / Linux Secret Service）。`--show` 仅显示掩码（如 `sk-…ab12`）与来源；`--clear` 清除。脚本/CI 可用 `--from-stdin <key>` 参数注入（key 作为命令行参数传入，**会进入 shell history**，仅适合脚本/CI；交互场景请用 `--set` 隐藏录入）。
 2. **回退**：项目目录 `.env` 文件写入 `ITERUM_OPENAI_API_KEY=...` / `ITERUM_ANTHROPIC_API_KEY=...`（由程序读文件加载，非 shell export）。**明文风险**：`.env` 为明文文件、且加载后对同机进程环境可见；`--show` 会标记来源为 `env`。
 3. **不要**：命令行 `export`（会进入 shell history）；不要把 key 写进代码、配置文件提交到 git（仓库 `.gitignore` 已排除 `.env`）。
 
@@ -134,5 +134,6 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 
 - Windows 二进制未签名（SmartScreen 拦截）；容器内无 OS 钥匙串（key 只能经 `.env` 挂载注入）；仅 Windows Terminal/现代终端完整支持 TUI，旧 console 降级纯文本。
 - M1 cli 入口未挂载 TUI（当前仅 `--headless`；`<App>` 渲染层组件已实现并有测试，接线为后续任务）。
+- `--headless` 未接真实 provider：当前仅 `--mock` 可用，不加 `--mock` 即报错退出（exit 1，即使已配置凭据）；真实 provider 接线为后续任务。
 - slash 命令（`/status` `/model` 等）、`new/list/resume` 会话管理、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
 - MCP HTTP/SSE transport 为实验项；lint/typecheck 验证集、结构化日志、ProviderError 重试体系为 M2。

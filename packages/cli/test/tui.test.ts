@@ -137,6 +137,11 @@ describe("routeSlash", () => {
     expect(routeSlash("/effort")).toBe("effort")
   })
 
+  test("识别 /help 与 /exit（容忍首尾空白）", () => {
+    expect(routeSlash("/help")).toBe("help")
+    expect(routeSlash("  /exit ")).toBe("exit")
+  })
+
   test("未知 slash 与普通文本返回 null", () => {
     expect(routeSlash("/status")).toBeNull()
     expect(routeSlash("hello world")).toBeNull()

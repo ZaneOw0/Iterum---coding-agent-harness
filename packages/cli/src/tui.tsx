@@ -115,11 +115,13 @@ export async function driveSession(
   }
 }
 
-export function routeSlash(text: string): "connect" | "model" | "effort" | null {
+export function routeSlash(text: string): "connect" | "model" | "effort" | "help" | "exit" | null {
   const t = text.trim()
   if (t === "/connect") return "connect"
   if (t === "/model") return "model"
   if (t === "/effort") return "effort"
+  if (t === "/help") return "help"
+  if (t === "/exit") return "exit"
   return null
 }
 
@@ -130,6 +132,14 @@ export function effortLabel(e?: string): string {
   if (e === "max") return "极高"
   return ""
 }
+
+export const SLASH_COMMANDS = [
+  { name: "/help", description: "显示全部指令说明" },
+  { name: "/connect", description: "连接厂商：选厂商 → 输 API key → 选模型" },
+  { name: "/model", description: "切换当前厂商的模型" },
+  { name: "/effort", description: "切换思考强度（低/中/高/极高）" },
+  { name: "/exit", description: "退出 iterum" },
+]
 
 const VENDOR_OPTIONS = Object.values(VENDORS).map(v => ({ id: v.id, name: v.name }))
 const EFFORT_LEVELS: { id: EffortLevel; label: string }[] = [
@@ -186,7 +196,15 @@ export function TuiApp({ session, loop, runtime, store, fetcher = fetchModels }:
     if (busy) return
     const cmd = routeSlash(text)
     if (cmd === null && text.trim().startsWith("/")) {
-      addAssistant("未知指令：可用 /connect /model /effort")
+      addAssistant("未知指令，输入 /help 查看可用指令")
+      return
+    }
+    if (cmd === "exit") {
+      process.exit(0)
+      return
+    }
+    if (cmd === "help") {
+      addAssistant("可用指令：\n" + SLASH_COMMANDS.map(c => `${c.name} — ${c.description}`).join("\n"))
       return
     }
     if (cmd === "connect") {
@@ -304,6 +322,7 @@ export function TuiApp({ session, loop, runtime, store, fetcher = fetchModels }:
       dialog={dialog}
       modelLabel={modelLabel}
       composerStatus={status}
+      slashCommands={SLASH_COMMANDS}
       connectProps={dialog === "connect" ? {
         vendors: VENDOR_OPTIONS, current: runtime.model, loading, error, models,
         onPickVendor, onSubmitKey, onPickModel, onManualModel, onCancel,

@@ -62,8 +62,9 @@ iterum --headless --mock --allow --prompt "..."   # --allow 显式放行危险�
 iterum connect openai --set               # 凭据录入（隐藏输入）/ --show 掩码查看 / --clear 清除
 ```
 
-- TUI：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动 AgentLoop 事件流；非 TTY 启动提示使用 `--headless`（exit 0）。Permission 弹窗（PermissionDialog 尚未接入 `<App>`、composer 未在审批期间阻塞）为后续任务。
-- 支持 8 家厂商：OpenAI / Anthropic / Gemini（官方 OpenAI 兼容端点）/ xAI Grok / Moonshot Kimi / DeepSeek / 智谱 GLM / 阿里通义千问。TUI 内 slash 指令：`/connect`（向导式连接：选厂商 → 输 key → 实时拉取模型列表 → 选模型）、`/model`（切换模型）、`/effort`（思考强度四档，按厂商官方机制映射；不支持的厂商显示"不支持"）。**按键：Enter 发送、Ctrl+J 换行**。配置持久化于 `~/.iterum/config.json`（key 仍只进 OS 钥匙串）。
+- TUI：TTY 下单列渲染 `<App>`（Transcript / Composer / Footer），Composer 提交驱动 AgentLoop 事件流；对话过程显示状态词条（连接中…/思考中…/执行工具 xxx…/回复中…）；非 TTY 启动提示使用 `--headless`（exit 0）。Permission 弹窗（PermissionDialog 尚未接入 `<App>`、composer 未在审批期间阻塞）为后续任务。
+- 支持 8 家厂商：OpenAI / Anthropic / Gemini（官方 OpenAI 兼容端点）/ xAI Grok / Moonshot Kimi / DeepSeek / 智谱 GLM / 阿里通义千问。国产厂商（deepseek/moonshot/zhipu/qwen）直连；海外厂商自动走系统代理（Windows 注册表检测，`~/.iterum/config.json` 的 `proxy` 字段可覆盖）。
+- TUI 内 slash 指令：输入 `/` 弹出指令浮窗（↑/↓ 选择、Tab 补全、Enter 执行、Esc 取消、实时过滤）——`/connect`（向导式连接：选厂商 → 输 key → 实时拉取模型列表 → 选模型）、`/model`（切换模型）、`/effort`（思考强度四档，按厂商官方机制映射；不支持的厂商显示"不支持"）、`/help`（指令说明）、`/exit`（退出）。**按键：Enter 发送、Ctrl+J 换行**。配置持久化于 `~/.iterum/config.json`（key 仍只进 OS 钥匙串）。
 
 ### Key 如何安全配置（目标机器）
 
@@ -132,7 +133,7 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 ## 已知限制
 
 - Windows 二进制未签名（SmartScreen 拦截）；容器内无 OS 钥匙串（key 只能经 `.env` 挂载注入）；仅 Windows Terminal/现代终端完整支持 TUI，旧 console 降级纯文本。
-- TUI 已接线但不完整：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动事件流，slash 向导对话框经 DialogHost 挂载；Permission 弹窗（PermissionDialog 未接入 `<App>`、审批期间不阻塞 composer）与真 TTY 体验打磨为后续任务。
+- TUI 已接线但不完整：TTY 下单列渲染 `<App>`（Transcript / Composer / Footer，Sidebar 已移除），Composer 提交驱动事件流，slash 浮窗与向导对话框经 DialogHost 挂载；Permission 弹窗（PermissionDialog 未接入 `<App>`、审批期间不阻塞 composer）与真 TTY 体验打磨为后续任务。
 - `--headless` 真实 provider 需凭据与网络：未配置凭据时报错退出（exit 1，引导 `iterum connect --set`）；配置凭据后启用真实 provider（OpenAI/Anthropic），需网络可达与有效 API key——离线/无凭据环境请用 `--mock`。
-- slash 指令已实现 `/connect` `/model` `/effort`；`/status` `/skills` `/mcp`、`new/list/resume` 会话管理、`--model/--provider` CLI 参数、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
+- slash 指令已实现 `/connect` `/model` `/effort` `/help` `/exit`（`/` 触发浮窗、Tab 补全）；`/status` `/skills` `/mcp`、`new/list/resume` 会话管理、`--model/--provider` CLI 参数、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
 - MCP HTTP/SSE transport 为实验项；lint/typecheck 验证集、结构化日志、ProviderError 重试体系为 M2。

@@ -114,6 +114,10 @@
 | T27 | TDD | ~/.iterum/config.json 存储 + createRuntime 组装重构 | `801b1c6`；PR #29 | 裁决 R1（rebuild 无 key 切模型返回 0、切厂商拒绝）、R2（keyring mock + home 注入防污染真实配置） | main(argv) 行为逐路径回归；本机钥匙串有真实 key，测试必须 mock keyring |
 | T28+T29 | 最小测试（用户指令） | slash UI 接线：ConnectWizard/ModelPicker/EffortPicker + DialogHost 挂载 + cli slash 路由与状态机 | `b95342e`；PR #30 | **用户加急指令：跳过评审、精简测试**（记入 ledger 偏离） | DialogHost 挂载后 Composer 必须 disabled 防输入广播冲突（ink useInput 全局广播） |
 | 修复 | 实机 bug | Composer 提交键绑定从未生效：Ctrl+Enter 在 Windows ConPTY 不可区分 → Enter 发送 / Ctrl+J 换行 | `2d6f915`；随 PR #30 | **M1 真 TTY 从未验证的代价**：T15 的绑定在任何平台都无法触发，实机演示 5 分钟内暴露 | 交互类组件必须有 stdin 模拟测试（ink-testing-library `stdin.write`），渲染断言不够 |
+| T31 | 最小测试（用户指令） | 系统代理支持（Bun fetch 不读代理 → 手写 CONNECT 隧道）与对话状态词条 | `de019b1`；PR #31 | 用户加急指令跳过评审 | 手写 chunked 解析初版有 CRLF 分裂损坏缺陷（T32 重写）；undici 在 Bun 下不可用（dispatcher 被忽略） |
+| T32 | 实机诊断驱动 | 真实对话三大缺陷修复：chunked 解析重写（pending 缓冲法+空闲超时）、工具链补齐（tools schema→provider→tool_calls 解析）、国产厂商直连分流 | `5c4bdf5`；PR #32 | **controller 实机取证**：13 组真实对话矩阵（中文/代码生成/危险指令/长回复/日韩语 × 直连+代理双路径）全通过 | 模型列表拉取成功 ≠ 对话流可用（GET 与流式 POST 路径不同）；M1 全 mock 测试掩盖了真实 provider 的工具链断链 |
+| 修复 | 用户决策 | 移除 Sidebar（界面精简为单列：Transcript + Composer + Footer），回退定高/滚动改造 | `00b4419`；随 PR #32 | 用户两次实测定高方案均不理想 → 回退 T33 全部 UI 改造（分支已废弃） | 终端的行数估算永远有偏差来源（CJK 宽度/动态输入框/margin）——用户"不要定长"的决策是正确的止损 |
+| 功能 | 用户指令 | slash 指令浮窗：`/` 触发、实时过滤、↑/↓ 选择、Tab 补全、`/help` `/exit` | `aefb459`；随 PR #32 | 用户直接给交互规格（浮窗内容/键位/行为） | 补全类交互必须把"选中项执行"与"原始文本执行"的分支写进测试 |
 
 ## CI/CD 执行记录
 

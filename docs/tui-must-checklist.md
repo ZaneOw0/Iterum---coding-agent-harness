@@ -8,14 +8,14 @@
 
 | # | 基线 MUST（§17 原文） | 附录 A | 实现位置 | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| 1 | TUI 以 **session transcript** 为主界面 | ✅ | `packages/tui/src/App.tsx`：主列 `flexGrow={1}` 挂 `Transcript`（Composer/Footer 附属）；`packages/tui/src/components/Transcript.tsx` 逐消息渲染 `MessageView` | `packages/tui/test/transcript.test.tsx`：以 Session 渲染，断言 Thought 行与 tool 结果；text part 由 `MessageView.tsx` 渲染、无独立断言 | ✅ |
+| 1 | TUI 以 **session transcript** 为主界面 | ✅ | `packages/tui/src/App.tsx`：单列布局，`Transcript` 为主（Composer/Footer 附属；Sidebar 已移除，2026-08-14 用户决策）；`packages/tui/src/components/Transcript.tsx` 逐消息渲染 `MessageView` | `packages/tui/test/transcript.test.tsx`：以 Session 渲染，断言 Thought 行与 tool 结果；text part 由 `MessageView.tsx` 渲染、无独立断言 | ✅ |
 | 2 | assistant 消息可拆 **text/tool/reasoning parts** | ✅ | `packages/tui/src/components/MessageView.tsx` `PartView`：按 `part.type` 分支渲染 text / reasoning / tool / feedback / permission；数据模型 `packages/core/src/transcript/types.ts`（`Part` 联合类型，SPEC §3.7） | `transcript.test.tsx`：assistant 消息含 reasoning + tool + text 三 parts，断言 Thought 行与 tool 摘要；text part 由 `MessageView.tsx` 渲染、无独立断言 | ✅ |
 | 3 | reasoning 支持 **collapsed/minimal** presentation | ✅ | `MessageView.tsx:7-15`：默认收起——仅一行 `+ Thought: {title} · {dur}s`（`dimColor` 低权重）；`open` 才展开 markdown。视觉权重以 `dimColor` 近似 thinkingOpacity≈0.6（SPEC 附录 B D5：Ink 无 opacity prop） | `transcript.test.tsx`："renders thought line with title and duration" | ✅ |
 | 4 | reasoning 显示 **duration** | ✅ | `MessageView.tsx:8`：`(part.time.end - part.time.start) / 1000` 秒数；时间数据来自 `ReasoningPart.time`（`transcript/types.ts:3`，SPEC §3.7 "Thought duration 唯一来源"） | `transcript.test.tsx`：断言渲染含 `"1.2s"`（time 0→1200ms） | ✅ |
 | 5 | tool output 支持 **collapse/hide** | ✅ | `MessageView.tsx:17-24`：ToolPart 默认收缩——命令 + 结果首行摘要（`output.split("\n")[0]`），禁止原始 stdout 刷屏（SPEC §3.3/基线 SHOULD NOT-2） | `transcript.test.tsx`："renders collapsed tool with result summary"（断言 "312 lines" 首行而非全文） | ✅ |
 | 6 | permission/question 为 **modal/blocked** 状态 | ✅ | 渲染：`packages/tui/src/components/PermissionDialog.tsx` + `DialogHost.tsx`（double border 独立 dialog、`[a] allow [d] deny [s] always` 三级决策）；core：`packages/core/src/permission/gateway.ts` `check → ask` + 命中规则，`packages/core/src/agent/loop.ts:71` 产生 `permission_requested` 事件；headless 默认 deny（`packages/cli/src/main.ts`） | `packages/core/test/permission.test.ts`（危险命令 ask + 规则暴露 + 会话记忆 + 签名键序）；`demos/demo1-guardrail.ts`（PASS） | ⚠️ 部分：组件与 core 状态已实现；T28 已挂载 DialogHost（slash 向导对话框），但 **PermissionDialog 未接入 `<App>`**、composer 未在 permission 期间阻塞（接线为后续任务） |
 | 7 | composer 为 **multiline first-class** input | ✅ | `packages/tui/src/components/Composer.tsx:9-14`：`useInput` 中 **Enter 提交发送、Ctrl+J 插入换行**（多行）、backspace 删除；常驻 composer（SPEC §3.11）。**基线偏离记录**：原文 MUST-7 为"Enter 插 `\n`、Ctrl+Enter 提交"，但 ink 5.2.1 对 Enter 只产生 `key.return`（input=`\r`、ctrl 恒 false），且 Windows ConPTY 下 Ctrl+Enter 与 Enter 到达字节完全相同（修饰符丢失）——该绑定在全部平台从未生效；2026-08-14 实机验证后改为 Enter 发送、Ctrl+J 换行（`\n` 与 `\r` 可区分，跨平台一致） | `packages/tui/test/composer.test.tsx`：`stdin.write` 模拟输入断言——`hi` + `\r` 触发 `onSubmit("hi")`；`\n`（Ctrl+J）不触发提交 | ✅（偏离已记录） |
-| 8 | wide terminal 才默认展示 **sidebar** | ✅ | `packages/tui/src/App.tsx:10-15`：`const wide = (stdout?.columns ?? 80) > 120` 才渲染 `<Sidebar>`（width 42，与基线"content width 预留 42 列"一致）；窄终端不渲染（SPEC §3.11） | 代码行为直接可读；无专门测试（`useStdout` 依赖终端上下文），见疑虑① | ✅ |
+| 8 | wide terminal 才默认展示 **sidebar** | ✅ | **已移除（偏离基线，2026-08-14 用户决策）**：Sidebar 组件与 App 挂载已删除，界面精简为单列（Transcript + Composer + Footer）——不再满足"wide 终端展示 sidebar"，属产品决策对基线的覆盖，记录于此 | 无（组件已删除） | ⚠️ 已移除（用户决策，2026-08-14） |
 | 9 | theme 使用 **semantic color tokens** | ✅ | `packages/tui/src/theme.ts` `semanticTheme`：text/textMuted/accent/info/success/warning/error/background/border/borderSubtle/thinkingOpacity；组件无硬编码 hex（基线 SHOULD NOT-5） | 源码核对：`MessageView`/`Footer`/`Composer` 均用 `dimColor` 或 semantic 名 | ✅（dark/light/system 主题切换为 M2） |
 | 10 | footer 保持**低视觉权重** | ✅ | `packages/tui/src/components/Footer.tsx`：cwd、permission/MCP 计数、`/status` 提示全部 `dimColor`；无凭据时 `yellow "Get started /connect"`（SPEC §3.10 边界条件） | `packages/tui/test/footer.test.tsx`：2 项（cwd + /status 提示；无凭据 connect 提示） | ✅ |
 
@@ -26,11 +26,11 @@
 
 ## 核对方法与结论
 
-- `bun test`：101 pass / 0 fail（2026-08-14，T28 后全量）。
+- `bun test`：131 pass / 0 fail（2026-08-14，T32+slash 浮窗后全量）。
 - 附录 A 与原文 §17 无出入，**无需回填**。
-- 结论：10 条 MUST 全部在组件/数据模型层满足；MUST-7 按键绑定因 Windows 平台实机验证偏离原文（Enter 发送 / Ctrl+J 换行，见 MUST-7 行偏离记录）；MUST-6 的 App 级接线（PermissionDialog 挂载 + composer 阻塞）为已知缺口（README 已如实声明）。
+- 结论：10 条 MUST 在组件/数据模型层满足；MUST-7 按键绑定因 Windows 平台实机验证偏离原文（Enter 发送 / Ctrl+J 换行，见 MUST-7 行偏离记录）；MUST-8 Sidebar 已按用户决策移除（见 MUST-8 行）；MUST-6 的 App 级接线（PermissionDialog 挂载 + composer 阻塞）为已知缺口（README 已如实声明）。
 
 ## 疑虑
 
-① MUST-7 的 multiline 按键行为现已有测试锁定（`composer.test.tsx` stdin.write 模拟）；MUST-8 的 >120 列判断仍无独立自动化测试（依赖 `useStdout` 终端宽度，ink-testing-library 未覆盖）；后续建议补 `App` 级渲染测试（含 wide/narrow 两种宽度）。
+① MUST-7 的 multiline 按键行为已有测试锁定（`composer.test.tsx` stdin.write 模拟）。
 ② MUST-3 的 `title` 字段 M1 置空（SPEC 附录 B E11：ReasoningPart.title 数据源 M2），duration 显示不受影响。

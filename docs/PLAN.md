@@ -1070,7 +1070,8 @@ import type { ToolRegistry } from "../tools/types"
 import { PermissionGateway } from "../permission/gateway"
 import { VerifyRunner, formatFeedback } from "../feedback/verify"
 import { buildSkillSection, type Skill } from "../memory/skills"
-import type { Message, PermissionRequest, Session, SessionEvent, ToolPart } from "../transcript/types"
+import type { Message, PermissionRequest, Session, ToolPart } from "../transcript/types"
+import type { SessionEvent } from "../transcript/events"
 
 export interface AgentDeps {
   provider: LLMProvider

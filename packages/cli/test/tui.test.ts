@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { reduceSession } from "../src/tui"
+import { driveSession, reduceSession } from "../src/tui"
 import { createSession } from "@iterum/core/transcript/session"
 import type { SessionEvent } from "@iterum/core/transcript/events"
 import type { Session } from "@iterum/core/transcript/types"
@@ -41,5 +41,43 @@ describe("reduceSession", () => {
     const last = cur.messages.at(-1)!
     expect(last.role).toBe("assistant")
     expect(last.parts.at(-1)).toMatchObject({ type: "text", text: "hello from iterum" })
+  })
+})
+
+describe("driveSession", () => {
+  test("run() 抛错时不重抛，错误以字符串返回，且不更新状态", async () => {
+    const boom = {
+      run: async function* (_s: Session, _t: string): AsyncIterable<SessionEvent> {
+        throw new Error("auth failed")
+      },
+    }
+    const updates: Session[] = []
+    const error = await driveSession(boom, s0, "hi", s => updates.push(s))
+    expect(error).toBe("auth failed")
+    expect(updates).toEqual([])
+  })
+
+  test("run() 抛非 Error 值时也能转成错误字符串", async () => {
+    const boom = {
+      run: async function* (_s: Session, _t: string): AsyncIterable<SessionEvent> {
+        throw "rate limited"
+      },
+    }
+    const error = await driveSession(boom, s0, "hi", () => {})
+    expect(error).toBe("rate limited")
+  })
+
+  test("正常事件流归约进状态并回调", async () => {
+    const fake = {
+      run: async function* (_s: Session, _t: string): AsyncIterable<SessionEvent> {
+        yield { type: "assistant_started", messageId: "m1" }
+        yield { type: "text_delta", messageId: "m1", partId: "", text: "ok" }
+      },
+    }
+    const updates: Session[] = []
+    const error = await driveSession(fake, s0, "hi", s => updates.push(s))
+    expect(error).toBeNull()
+    const last = updates.at(-1)!
+    expect(last.messages.at(-1)).toMatchObject({ role: "assistant", parts: [{ type: "text", text: "ok" }] })
   })
 })

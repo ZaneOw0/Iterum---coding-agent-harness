@@ -16,6 +16,14 @@ import { createSession } from "@iterum/core/transcript/session"
 import { runConnect } from "./connect"
 import { runTui } from "./tui"
 
+// 从 Bun 进程 argv 剥离出用户参数：
+// 脚本模式 argv=[bun路径, 脚本路径, ...参数]；编译模式（Bun 1.3.14 实测）argv=["bun", 可执行文件, ...参数]，
+// 亦有 argv=[可执行文件, ...参数] 形态——以 mainPath 在 argv 中的位置为准，找不到时按脚本模式兜底。
+export function appArgs(argv: string[], mainPath: string): string[] {
+  const i = argv.indexOf(mainPath)
+  return i >= 0 ? argv.slice(i + 1) : argv.slice(2)
+}
+
 export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "connect") return runConnect(argv.slice(1))
   if (argv.includes("--help")) { console.log("Usage: iterum [--headless] [--mock] [--allow] [--prompt <text>]"); return 0 }
@@ -23,7 +31,7 @@ export async function main(argv: string[]): Promise<number> {
 
   const headless = argv.includes("--headless")
   const promptIdx = argv.indexOf("--prompt")
-  const prompt = promptIdx >= 0 ? argv[promptIdx + 1] : ""
+  const prompt = promptIdx >= 0 ? argv[promptIdx + 1] ?? "" : ""
   const mock = argv.includes("--mock")
   const allowDanger = argv.includes("--allow")
 
@@ -94,4 +102,4 @@ async function resolveProvider(): Promise<{ provider: LLMProvider; name: string;
   return null
 }
 
-if (import.meta.main) process.exitCode = await main(Bun.argv)
+if (import.meta.main) process.exitCode = await main(appArgs(Bun.argv, Bun.main))

@@ -2,7 +2,8 @@ import React, { useState } from "react"
 import { render } from "ink"
 import { App } from "@iterum/tui/src/App"
 import type { AgentLoop } from "@iterum/core/agent/loop"
-import type { Session, SessionEvent } from "@iterum/core/transcript/types"
+import type { Session } from "@iterum/core/transcript/types"
+import type { SessionEvent } from "@iterum/core/transcript/events"
 
 export function reduceSession(session: Session, event: SessionEvent): Session {
   if (event.type === "session_idle") return session
@@ -34,6 +35,26 @@ export function reduceSession(session: Session, event: SessionEvent): Session {
   return session
 }
 
+// 驱动事件流：run() 抛错不重抛，转为错误字符串返回（null = 成功）
+export async function driveSession(
+  loop: Pick<AgentLoop, "run">,
+  session: Session,
+  text: string,
+  onUpdate: (s: Session) => void,
+): Promise<string | null> {
+  // run() 会原地改写传入的 session；给浅拷贝让状态对象保持干净，事件归约产出新状态
+  let cur: Session = { ...session, messages: [...session.messages] }
+  try {
+    for await (const ev of loop.run(cur, text)) {
+      cur = reduceSession(cur, ev)
+      onUpdate(cur)
+    }
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+}
+
 export function TuiApp({ session, loop, connected = true }: { session: Session; loop: AgentLoop; connected?: boolean }) {
   const [s, setS] = useState(session)
   const [busy, setBusy] = useState(false)
@@ -41,11 +62,17 @@ export function TuiApp({ session, loop, connected = true }: { session: Session; 
     if (busy) return
     setBusy(true)
     try {
-      // run() 会原地改写传入的 session；给浅拷贝让状态对象保持干净，事件归约产出新状态
-      let cur: Session = { ...s, messages: [...s.messages] }
-      for await (const ev of loop.run(cur, text)) {
-        cur = reduceSession(cur, ev)
-        setS(cur)
+      const error = await driveSession(loop, s, text, setS)
+      if (error) {
+        // 错误呈现为一条 assistant 文本消息，TUI 不崩溃、busy 复位
+        setS(cur => ({
+          ...cur,
+          messages: [...cur.messages, {
+            id: crypto.randomUUID(), role: "assistant",
+            parts: [{ type: "text", text: `Error: ${error}` }],
+            time: { start: Date.now(), end: 0 },
+          }],
+        }))
       }
     } finally {
       setBusy(false)

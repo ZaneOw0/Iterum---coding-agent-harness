@@ -9,8 +9,10 @@ import { PermissionGateway } from "@iterum/core/permission/gateway"
 import { VerifyRunner } from "@iterum/core/feedback/verify"
 import { SkillCatalog, ReadSkillTool } from "@iterum/core/memory/skills"
 import { createSession } from "@iterum/core/transcript/session"
+import { runConnect } from "./connect"
 
 export async function main(argv: string[]): Promise<number> {
+  if (argv[0] === "connect") return runConnect(argv.slice(1))
   if (argv.includes("--help")) { console.log("Usage: iterum [--headless] [--mock] [--allow] [--prompt <text>]"); return 0 }
   for (const a of argv) if (a.startsWith("-") && !["--headless", "--mock", "--prompt", "--allow"].includes(a)) return 2
 

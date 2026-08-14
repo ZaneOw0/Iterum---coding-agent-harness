@@ -30,3 +30,6 @@ export type { SessionSummary } from "./session/store"
 
 export { PermissionGateway, defaultRules } from "./permission/gateway"
 export type { PermissionDecision, PermissionRule, PermissionCheckResult } from "./permission/types"
+
+export { VerifyRunner, formatFeedback } from "./feedback/verify"
+export type { ChangedFile, Feedback } from "./feedback/types"

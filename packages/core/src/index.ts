@@ -24,3 +24,6 @@ export type { Tool, ToolCall, CommandRunner } from "./tools/types"
 export { ToolRegistry } from "./tools/registry"
 export { ReadFileTool, WriteFileTool } from "./tools/fs"
 export { BashTool } from "./tools/bash"
+
+export { SkillCatalog, buildSkillSection, ReadSkillTool } from "./memory/skills"
+export type { Skill } from "./memory/skills"

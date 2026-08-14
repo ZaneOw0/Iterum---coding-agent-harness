@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { ChatRequest, LLMEvent, LLMProvider } from "./types"
+import { resolveEffort, type EffortLevel, type VendorDef } from "./vendors"
 
 type StreamEvent = {
   type: string
@@ -10,16 +11,19 @@ type StreamEvent = {
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic
-  constructor(private opts: { apiKey: string; model?: string; baseURL?: string }) {
-    this.client = new Anthropic({ apiKey: opts.apiKey, baseURL: opts.baseURL })
+  constructor(private opts: { apiKey: string; model?: string; baseURL?: string; vendor?: VendorDef }) {
+    this.client = new Anthropic({ apiKey: opts.apiKey, baseURL: opts.baseURL ?? opts.vendor?.baseURL })
   }
   async *complete(req: ChatRequest): AsyncIterable<LLMEvent> {
-    const stream = await this.client.messages.stream({
+    const args: Record<string, unknown> = {
       model: this.opts.model ?? req.model,
       system: req.system,
       max_tokens: req.maxTokens ?? 4096,
       messages: req.messages,
-    })
+    }
+    const ep = resolveEffort(this.opts.vendor, this.opts.model ?? req.model, req.effort as EffortLevel | undefined)
+    if (ep?.kind === "thinking") args.thinking = { type: "enabled", budget_tokens: ep.budget }
+    const stream = await this.client.messages.stream(args as never)
     const toolBlocks = new Map<number, { name: string; json: string }>()
     for await (const event of stream as AsyncIterable<StreamEvent>) {
       if (event.type === "content_block_delta") {

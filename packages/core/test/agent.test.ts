@@ -127,6 +127,20 @@ describe("AgentLoop", () => {
     expect(reasoning.time.end - reasoning.time.start).toBeGreaterThanOrEqual(15)
   })
 
+  test("loop 把 effort 透传进请求", async () => {
+    let gotEffort: string | undefined
+    const provider = {
+      async *complete(req: { model: string; system: string; messages: unknown[]; effort?: string }) {
+        gotEffort = req.effort
+        yield { type: "done" as const }
+      },
+    }
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), permissions: new PermissionGateway(), verify: new VerifyRunner("bun test", async () => ({ exitCode: 0, output: "" })), resolvePermission: async () => "deny" as const, effort: "max" })
+    const session = createSession({ cwd: "C:/p", title: "t", provider: "mock", model: "m" })
+    for await (const _ of loop.run(session, "hi")) {}
+    expect(gotEffort).toBe("max")
+  })
+
   test("permission ask invokes resolvePermission; deny breaks loop and does NOT enter feedback retry", async () => {
     const fakeTool: Tool = {
       name: "bash", description: "bash",

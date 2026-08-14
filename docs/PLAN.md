@@ -237,7 +237,7 @@ export interface ToolPart {
 }
 export interface PermissionRequest { id: string; tool: string; args: Record<string, unknown>; reason: string; riskLevel: "low" | "high" }
 export interface PermissionPart { type: "permission"; request: PermissionRequest; decision?: "allow" | "deny" }
-export interface FeedbackPart { type: "feedback"; verifier: string; status: "pass" | "fail"; summary: string; failureIndex?: number }
+export interface FeedbackPart { type: "feedback"; verifier: string; status: "pass" | "fail"; summary: string; failureIndex?: number; exitCode?: number; tool?: string }
 export interface Message { id: string; role: "user" | "assistant"; parts: Part[]; time: { start: number; end: number } }
 export interface ContextUsage { inputTokens: number; outputTokens: number; reasoningTokens: number; costUsd: number; contextPercent: number }
 export interface Session {
@@ -898,6 +898,8 @@ git commit -m "feat(core): verify runner with normalized feedback loop"
 
 ### Task 9: core/agent — AgentLoop 状态机
 
+> 注（T8 评审 F1）：本任务需在 `packages/core/src/transcript/types.ts` 的 `FeedbackPart` 上**补加** `exitCode?: number`、`tool?: string` 两个可选字段（T8 已合并版本无此两字段；demo2 断言依赖 exitCode 透传）。render 透传见 Step 3 代码。
+
 **目标：** 组装 provider/tools/permission/verify 为完整循环（SPEC §3.2、§5.3；演示②③的基础）。
 
 **涉及文件：**
@@ -1177,7 +1179,7 @@ export class AgentLoop {
         if (feedback.status === "fail") {
           session.feedbackFailures += 1
           lastFailedSummary = feedback.summary
-          assistant.parts.push({ type: "feedback", verifier: feedback.verifier, status: "fail", summary: feedback.summary, failureIndex: session.feedbackFailures })
+          assistant.parts.push({ type: "feedback", verifier: feedback.verifier, status: "fail", summary: feedback.summary, failureIndex: session.feedbackFailures, exitCode: feedback.exitCode, tool: feedback.tool })
           yield { type: "feedback_injected", partId: "", verifier: feedback.verifier, status: "fail", summary: feedback.summary, failureIndex: session.feedbackFailures }
           if (session.feedbackFailures >= this.threshold) {
             assistant.parts.push({ type: "text", text: `I've failed verification ${session.feedbackFailures} times in a row. help — please review my attempts:\n${assistant.parts.filter(p => p.type === "tool").map(p => `${(p as ToolPart).tool} ${JSON.stringify((p as ToolPart).args)}`).join("\n")}\nlast failure: ${lastFailedSummary}` })
@@ -1200,7 +1202,7 @@ export class AgentLoop {
     return m.parts.map(p => {
       if (p.type === "text" || p.type === "reasoning") return p.text ?? p.markdown
       if (p.type === "tool") return `[tool:${p.tool}] ${JSON.stringify(p.args)}\n[result] ${p.result?.output ?? "pending"}`
-      if (p.type === "feedback") return formatFeedback({ verifier: p.verifier, status: p.status, summary: p.summary, affectedFiles: [] })
+      if (p.type === "feedback") return formatFeedback({ verifier: p.verifier, status: p.status, summary: p.summary, affectedFiles: [], exitCode: p.exitCode, tool: p.tool })
       if (p.type === "permission") return `[permission] ${p.request.tool} ${p.decision ?? "pending"}`
       return ""
     }).join("\n")

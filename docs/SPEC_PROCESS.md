@@ -108,6 +108,8 @@
 ## 5. 实现轮次的流程偏离与裁决
 
 > 来源：SDD ledger（`.superpowers/sdd/PLAN.md/*`：progress.md、各 task-*-brief/report/review-package.md，git-ignored 过程记录）。实现阶段（T1–T22 + fix-11）在 subagent-driven-development（每 task 新鲜 implementer + 两阶段评审）下的偏离与裁决如下。
+>
+> 出处注：第 2 条（subagent 派发连续失败）来自会话交接记录，ledger 无书面原始条目。
 
 1. **环境限制与替代**：task 工具无 model 参数，SDD Model Selection 的分级选模型无法执行——统一使用 general 子代理（ledger 前置记录）；SDD 的 POSIX 脚本在本机以 PowerShell 等价操作替代（brief 抽取、diff 打包），行为等价并记录于 ledger。Windows 本机无 make，各 task 以 `bun test`（Makefile `test` 目标本体）验证。
 2. **subagent 派发中断与恢复**：上会话末段 subagent 派发连续失败，会话中断；新会话恢复后重试成功。期间 controller 本地完成评审并记 ledger 偏离（评审路径以 controller 本地执行为替代）。

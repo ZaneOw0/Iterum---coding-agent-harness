@@ -4,7 +4,7 @@ Iterum 是一个 **CLI-only** 的 coding agent（类 Claude Code / opencode）�
 
 其核心机制是**可观察、可断言、可演示的客观反馈闭环**：agent 每次工具动作后自动运行验证（M1 为测试命令，`ITERUM_TEST_CMD` 可配；lint/类型检查验证集为 M2），失败结果归一化回灌进下一轮决策驱动自我修正，连续失败达到阈值后停下向用户求助。
 
-> 状态：**M1 已实现**（core 全模块 / TUI 渲染层组件 / cli `--headless` + `connect` / demos 三件套 / 三平台二进制与 Docker 分发）。设计文档见 `docs/SPEC.md`，实现计划见 `docs/PLAN.md`，过程记录见 `docs/SPEC_PROCESS.md` / `docs/AGENT_LOG.md`，TUI 基线自查见 `docs/tui-must-checklist.md`，安全边界见 `docs/security.md`。交互式 TUI 接线（`<App>` 挂载）为后续任务，见"已知限制"。
+> 状态：**M1 已实现**（core 全模块 / TUI 渲染层组件 / cli `--headless` + `connect` / demos 三件套 / 三平台二进制与 Docker 分发）。设计文档见 `docs/SPEC.md`，实现计划见 `docs/PLAN.md`，过程记录见 `docs/SPEC_PROCESS.md` / `docs/AGENT_LOG.md`，TUI 基线自查见 `docs/tui-must-checklist.md`，安全边界见 `docs/security.md`。交互式 TUI 已接线（T22：TTY 下 `runTui` 挂载 `<App>`，Composer 提交驱动 AgentLoop 事件流；非 TTY 提示使用 `--headless`）；Permission Dialog 挂载等打磨为后续任务，见"已知限制"。
 
 ---
 
@@ -62,7 +62,7 @@ iterum --headless --mock --allow --prompt "..."   # --allow 显式放行危险�
 iterum connect openai --set               # 凭据录入（隐藏输入）/ --show 掩码查看 / --clear 清除
 ```
 
-- TUI：渲染层组件已就绪（Transcript / Composer / Footer / DialogHost / PermissionDialog / Sidebar，`packages/tui/`），但 M1 的 cli 入口尚未挂载 `<App>`，当前非 `--headless` 启动会提示使用 headless。交互式 TUI 接线为后续任务。
+- TUI：T22 已完成接线——TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动 AgentLoop 事件流；非 TTY 启动提示使用 `--headless`（exit 0）。Permission Dialog 挂载（DialogHost 尚未接入 `<App>`）与真 TTY 体验打磨为后续任务。
 - slash 命令（`/status` `/model` `/skills` `/mcp`）为 M2（SPEC §4.3 键盘优先要求）；M1 的凭据交互通道为 `iterum connect` 子命令（等价于 `/connect` 的四操作）。
 
 ### Key 如何安全配置（目标机器）
@@ -132,7 +132,7 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 ## 已知限制
 
 - Windows 二进制未签名（SmartScreen 拦截）；容器内无 OS 钥匙串（key 只能经 `.env` 挂载注入）；仅 Windows Terminal/现代终端完整支持 TUI，旧 console 降级纯文本。
-- M1 cli 入口未挂载 TUI（当前仅 `--headless`；`<App>` 渲染层组件已实现并有测试，接线为后续任务）。
+- TUI 已接线但不完整：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动事件流；Permission Dialog 尚未挂载（DialogHost 未接入 `<App>`），真 TTY 体验打磨为后续任务。
 - `--headless` 未接真实 provider：当前仅 `--mock` 可用，不加 `--mock` 即报错退出（exit 1，即使已配置凭据）；真实 provider 接线为后续任务。
 - slash 命令（`/status` `/model` 等）、`new/list/resume` 会话管理、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
 - MCP HTTP/SSE transport 为实验项；lint/typecheck 验证集、结构化日志、ProviderError 重试体系为 M2。

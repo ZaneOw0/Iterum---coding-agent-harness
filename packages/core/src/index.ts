@@ -27,3 +27,6 @@ export { BashTool } from "./tools/bash"
 
 export { SkillCatalog, buildSkillSection, ReadSkillTool } from "./memory/skills"
 export type { Skill } from "./memory/skills"
+
+export { CredentialStore, maskKey } from "./credentials/store"
+export type { ProviderCredential } from "./credentials/store"

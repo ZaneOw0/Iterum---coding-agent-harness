@@ -4,5 +4,8 @@
   "workspaces": ["packages/*"],
   "devDependencies": {
     "@types/bun": "^1.3.14"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "^1.3.0"
   }
 }

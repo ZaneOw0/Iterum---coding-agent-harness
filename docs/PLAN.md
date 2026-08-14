@@ -161,7 +161,7 @@ Expected: PASS（1 passed）
 
 ```bash
 git add package.json tsconfig.json bun.lock packages/core packages/tui/package.json packages/cli/package.json Makefile .gitignore
-git commit -m "feat(workspace): bun workspace scaffold with make test"
+git commit -m "feat(workspace): 建立 Bun workspace 脚手架与一键测试入口"
 ```
 
 ---
@@ -208,7 +208,7 @@ Expected: 输出 `keyring OK: true`。将结果与运行方式写入 `spikes/REA
 
 ```bash
 git add spikes/
-git commit -m "chore(spike): verify bun compile with napi-rs keyring on windows"
+git commit -m "chore(spike): 验证 bun compile 打包 napi-rs keyring（Windows）"
 ```
 
 ---
@@ -324,7 +324,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/transcript packages/core/test/transcript.test.ts packages/core/src/index.ts
-git commit -m "feat(core): transcript data model and session events"
+git commit -m "feat(core): transcript 数据模型与事件类型"
 ```
 
 ---
@@ -431,7 +431,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/llm packages/core/test/llm packages/core/src/index.ts
-git commit -m "feat(core): llm event model and scripted MockProvider"
+git commit -m "feat(core): LLM 事件模型与脚本化 MockProvider"
 ```
 
 ---
@@ -529,7 +529,7 @@ Expected: PASS（含 anthropic.test.ts 同构断言）
 
 ```bash
 git add packages/core/src/llm packages/core/test/llm package.json bun.lock
-git commit -m "feat(core): openai and anthropic provider adapters"
+git commit -m "feat(core): OpenAI 与 Anthropic provider 适配"
 ```
 
 ---
@@ -671,7 +671,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/tools packages/core/test/tools.test.ts packages/core/src/index.ts
-git commit -m "feat(core): tool interface, registry, fs and bash tools"
+git commit -m "feat(core): 工具接口、注册表与文件/Shell 工具"
 ```
 
 ---
@@ -794,7 +794,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/permission packages/core/test/permission.test.ts packages/core/src/index.ts
-git commit -m "feat(core): permission gateway with dangerous command rules and session memory"
+git commit -m "feat(core): 权限网关与危险命令规则"
 ```
 
 ---
@@ -891,7 +891,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/feedback packages/core/test/feedback.test.ts packages/core/src/index.ts
-git commit -m "feat(core): verify runner with normalized feedback loop"
+git commit -m "feat(core): VerifyRunner 验证反馈归一化"
 ```
 
 ---
@@ -1221,7 +1221,7 @@ Expected: PASS（全部 6 个 agent 测试绿）
 
 ```bash
 git add packages/core/src/agent packages/core/test/agent.test.ts packages/core/src/index.ts
-git commit -m "feat(core): agent loop with feedback injection and threshold stop"
+git commit -m "feat(core): AgentLoop 反馈回灌与阈值停手"
 ```
 
 ---
@@ -1361,7 +1361,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/credentials packages/core/test/credentials.test.ts packages/core/test/fixtures packages/core/src/index.ts
-git commit -m "feat(core): credential store with os keychain and env fallback"
+git commit -m "feat(core): 凭据存储与 .env 回退"
 ```
 
 ### Task 11: core/memory — SKILL.md 发现、注入与 read_skill 工具
@@ -1510,7 +1510,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/memory packages/core/test/memory.test.ts packages/core/test/fixtures packages/core/src/index.ts
-git commit -m "feat(core): skill catalog with SKILL.md discovery and precedence"
+git commit -m "feat(core): SKILL.md 发现与注入"
 ```
 
 ---
@@ -1616,7 +1616,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/mcp packages/core/test/mcp.test.ts packages/core/test/fixtures package.json bun.lock
-git commit -m "feat(core): stdio mcp client with tool bridging"
+git commit -m "feat(core): stdio MCP 客户端与工具桥"
 ```
 
 ---
@@ -1723,7 +1723,7 @@ Expected: PASS
 
 ```bash
 git add packages/core/src/session packages/core/test/session-store.test.ts packages/core/src/index.ts
-git commit -m "feat(core): session persistence with corrupt-file resilience"
+git commit -m "feat(core): session 持久化与损坏文件容错"
 ```
 
 ---
@@ -1844,7 +1844,7 @@ Expected: PASS
 
 ```bash
 git add packages/cli packages/core/src/index.ts
-git commit -m "feat(cli): entry point with headless json event stream"
+git commit -m "feat(cli): 入口组装与 headless JSON 事件流"
 ```
 
 ---
@@ -1984,7 +1984,7 @@ Expected: PASS（快照断言通过）
 
 ```bash
 git add packages/tui package.json bun.lock
-git commit -m "feat(tui): ink shell with semantic theme and part renderers"
+git commit -m "feat(tui): ink 渲染骨架与语义主题"
 ```
 
 ---
@@ -2175,7 +2175,7 @@ Expected: PASS
 
 ```bash
 git add packages/tui
-git commit -m "feat(tui): composer, footer, dialogs and wide sidebar"
+git commit -m "feat(tui): composer/footer/dialogs 与宽屏 sidebar"
 ```
 
 ---
@@ -2334,7 +2334,7 @@ Expected: 三条 `PASS demo*` 输出，exit 0
 
 ```bash
 git add demos Makefile
-git commit -m "feat(demos): deterministic mechanism demos for guardrail, feedback loop, threshold stop"
+git commit -m "feat(demos): 机制演示三件套确定性脚本"
 ```
 
 ---
@@ -2390,7 +2390,7 @@ Run: `docker build -t iterum:latest .`（本机无 Docker 时记录结论至 doc
 
 ```bash
 git add scripts Dockerfile Makefile README.md
-git commit -m "feat(dist): single-binary build targets and docker image"
+git commit -m "feat(dist): 单文件二进制构建与 Docker 镜像"
 ```
 
 ---
@@ -2489,6 +2489,150 @@ Expected: 两个平台 job 均绿；GitHub Actions 最后一次执行 pass。
 
 ---
 
+### Task 21: cli — /connect 凭据交互（验收标准 5 补齐）
+
+**目标：** 补齐验收标准 5 的交互通道（T16 评审 F1 发现全计划无任务承接）：首次引导录入（隐藏输入）、查看（掩码）、更新、清除。
+
+**涉及文件：**
+- Create: `packages/cli/src/connect.ts`、`packages/cli/test/connect.test.ts`
+- Modify: `packages/cli/src/main.ts`（`connect` 子命令路由）
+
+**Interfaces:**
+- Consumes: T10 `CredentialStore`/`maskKey`。
+- Produces: `runConnect(argv: string[]): Promise<number>`。
+
+- [ ] **Step 1: 写失败测试**
+
+```ts
+// packages/cli/test/connect.test.ts
+import { describe, expect, test, mock, beforeEach } from "bun:test"
+
+const mem = new Map<string, string>()
+mock.module("@napi-rs/keyring", () => ({
+  Entry: class {
+    constructor(private service: string, private account: string) {}
+    setPassword(p: string) { mem.set(`${this.service}/${this.account}`, p) }
+    getPassword() { return mem.get(`${this.service}/${this.account}`) ?? null }
+    deletePassword() { mem.delete(`${this.service}/${this.account}`) }
+  },
+}))
+
+import { runConnect } from "../src/connect"
+
+function capture(fn: () => Promise<number>) {
+  const out: string[] = []
+  const orig = console.log
+  console.log = (s: any) => { out.push(String(s)) } as any
+  return fn().then(code => { console.log = orig; return { code, out } })
+}
+
+describe("connect", () => {
+  beforeEach(() => { mem.clear() })
+
+  test("--show prints masked key and source", async () => {
+    const { code, out } = await capture(() => runConnect(["openai", "--show"]))
+    expect(code).toBe(0)
+    expect(out.some(l => l.includes("sk-…")) || out.some(l => l.includes("(unset)"))).toBe(true)
+    expect(out.join(" ")).not.toContain("sk-abc123456789") // 永不回显明文
+  })
+
+  test("--set via piped stdin stores key (hidden input not required when piped)", async () => {
+    const origStdin = process.stdin as any
+    const { code } = await capture(() => runConnect(["openai", "--set", "--from-stdin", "test-key-openai-0000"]))
+    expect(code).toBe(0)
+    expect(mem.get("iterum/openai")).toBe("test-key-openai-0000")
+  })
+
+  test("--clear removes key", async () => {
+    await runConnect(["openai", "--set", "--from-stdin", "test-key-openai-0000"])
+    const { code } = await capture(() => runConnect(["openai", "--clear"]))
+    expect(code).toBe(0)
+    expect(mem.get("iterum/openai")).toBeUndefined()
+  })
+
+  test("unknown provider exits 2", async () => {
+    const { code } = await capture(() => runConnect(["nope", "--show"]))
+    expect(code).toBe(2)
+  })
+})
+```
+
+- [ ] **Step 2: Run 确认失败**
+
+Run: `bun test packages/cli/test/connect.test.ts`
+Expected: FAIL（runConnect 不存在）
+
+- [ ] **Step 3: 最小实现**
+
+```ts
+// packages/cli/src/connect.ts
+import { CredentialStore, maskKey } from "@iterum/core/credentials/store"
+
+type Provider = "openai" | "anthropic"
+const PROVIDERS: Provider[] = ["openai", "anthropic"]
+
+export async function runConnect(argv: string[]): Promise<number> {
+  const provider = argv[0] as Provider
+  if (!PROVIDERS.includes(provider)) return 2
+  const store = new CredentialStore()
+
+  if (argv.includes("--set")) {
+    const key = argv.includes("--from-stdin") ? argv[argv.indexOf("--from-stdin") + 1] : await hiddenPrompt(`Enter ${provider} API key: `)
+    if (!key) { console.error("no key provided"); return 1 }
+    await store.set(provider, key)
+    console.log(`Stored ${provider} key (${maskKey(key)})`)
+    return 0
+  }
+  if (argv.includes("--clear")) {
+    await store.remove(provider)
+    console.log(`Cleared ${provider} key`)
+    return 0
+  }
+  // --show（默认）：掩码 + 来源，绝不回显明文
+  const cred = await store.get(provider)
+  if (cred) console.log(`${provider}: ${maskKey(cred.key)} (source: ${cred.source})`)
+  else console.log(`${provider}: (unset)`)
+  return 0
+}
+
+async function hiddenPrompt(label: string): Promise<string> {
+  // 交互终端隐藏输入：setRawMode + 手动回显 '*'；非 TTY（管道）时退化为空并报错
+  if (!process.stdin.isTTY) { console.error("interactive hidden input requires a TTY; use --from-stdin <key> for scripts"); return "" }
+  return new Promise(resolve => {
+    process.stdout.write(label)
+    process.stdin.setRawMode(true)
+    let buf = ""
+    const onData = (chunk: Buffer) => {
+      for (const ch of chunk) {
+        const c = String.fromCharCode(ch)
+        if (c === "\r" || c === "\n") { process.stdout.write("\n"); cleanup(); resolve(buf) }
+        else if (c === "\u0003") { process.stdout.write("^C\n"); cleanup(); resolve("") }
+        else if (c === "\u007f" || c === "\b") { buf = buf.slice(0, -1) }
+        else { buf += c; process.stdout.write("*") }
+      }
+    }
+    const cleanup = () => { process.stdin.setRawMode(false); process.stdin.off("data", onData) }
+    process.stdin.on("data", onData)
+  })
+}
+```
+
+`main.ts` 路由：`if (argv[0] === "connect") return runConnect(argv.slice(1))`（置于 --help 处理之前）。
+
+- [ ] **Step 4: Run 确认通过**
+
+Run: `make test`
+Expected: PASS（全量含 connect 4 项）
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/cli
+git commit -m "feat(cli): /connect 凭据交互——隐藏录入与掩码查看"
+```
+
+---
+
 ## 依赖与并行关系（worktree 规划）
 
 ```text
@@ -2521,7 +2665,7 @@ T1 (scaffold)
 - **并行组 B1（T3 后）**：T4、T6、T10、T11、T13、T15 六者互不依赖，可并行（业务总览"每个独立功能/大模块一个 worktree"）。
 - **并行组 B2（B1 后）**：T5（需 T4）、T7/T8/T12（需 T6）可并行。
 - **并行组 C**：T9（需 T4/T6/T7/T8/T11）完成后 → T14（另需 T10/T11/T13）、T17、T16 可并行。
-- **收尾组 D**：T18（需 T14）；T19（需 T16/T18）；T20（需 T17/T19；推送须人工审批）。
+- **收尾组 D**：T21（需 T14，/connect 验收标准 5 补齐）∥ T18（需 T14）；T19（需 T16/T18）；T20（需 T17/T19；推送须人工审批）。
 
 > 注：B1/B2 拆分是冷启动验证（SPEC_PROCESS.md §6）发现初版并行声明与 Interfaces 依赖矛盾后的修订。
 

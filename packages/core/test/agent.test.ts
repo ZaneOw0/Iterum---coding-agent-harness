@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { MockProvider } from "../src/llm/mock"
 import { AgentLoop } from "../src/agent/loop"
 import { ToolRegistry } from "../src/tools/registry"
+import { ReadFileTool, WriteFileTool } from "../src/tools/fs"
 import { PermissionGateway } from "../src/permission/gateway"
 import { VerifyRunner, formatFeedback } from "../src/feedback/verify"
 import { createSession } from "../src/transcript/session"
@@ -164,5 +165,25 @@ describe("AgentLoop", () => {
     const permPart = s.messages.flatMap(m => m.parts).find(p => p.type === "permission")
     expect(permPart).toMatchObject({ decision: "deny" }) // decision 回填
     expect(events.some(e => e.type === "feedback_injected")).toBe(false)
+  })
+
+  test("loop 请求携带工具 function schema（真实 ToolRegistry）", async () => {
+    const reqs: any[] = []
+    const provider: LLMProvider = {
+      async *complete(req): AsyncIterable<LLMEvent> {
+        reqs.push(req)
+        yield { type: "done" }
+      },
+    }
+    const reg = new ToolRegistry()
+    reg.register(new ReadFileTool()); reg.register(new WriteFileTool())
+    const loop = new AgentLoop({ provider, tools: reg, permissions: new PermissionGateway(), verify: passVerify, resolvePermission: alwaysAllow })
+    const s = createSession({ cwd: "C:/proj", title: "t", provider: "mock", model: "mock" })
+    await drain(loop, s, "hi")
+    const tools = reqs[0].tools
+    const read = tools.find((t: any) => t.function.name === "read_file")
+    const write = tools.find((t: any) => t.function.name === "write_file")
+    expect(read.function.parameters).toEqual({ type: "object", properties: { path: { type: "string" } }, required: ["path"] })
+    expect(write.function.parameters).toEqual({ type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] })
   })
 })

@@ -18,8 +18,7 @@ import type { Session } from "@iterum/core/transcript/types"
 import { readConfig, writeConfig, type AgentConfig } from "./config"
 import { runConnect } from "./connect"
 import { runTui } from "./tui"
-import { detectProxy } from "./proxy-config"
-import { createProxiedFetch } from "@iterum/core/llm/proxy"
+import { vendorFetch } from "./proxy-config"
 import { fetchModels } from "@iterum/core/llm/models"
 
 // 从 Bun 进程 argv 剥离出用户参数：
@@ -62,12 +61,11 @@ async function resolveState(mock: boolean, config: AgentConfig, store: Credentia
   if (mock) {
     return { provider: new MockProvider([{ type: "text", text: "hello from iterum" }]), providerName: "mock", model: "mock", connected: false }
   }
-  const proxy = detectProxy(config)
-  const fetchImpl = proxy ? createProxiedFetch(proxy) : undefined
   if (config.provider) {
     const vendor = getVendor(config.provider)
     const cred = vendor ? await store.get(vendor.id) : undefined
     const model = config.model ?? vendor?.defaultModel ?? ""
+    const fetchImpl = vendorFetch(vendor, config)
     if (vendor && cred) {
       const provider = vendor.flavor === "openai"
         ? new OpenAIProvider({ apiKey: cred.key, model, vendor, fetchImpl })
@@ -81,10 +79,18 @@ async function resolveState(mock: boolean, config: AgentConfig, store: Credentia
     }
   }
   // 无 config：维持既有探测逻辑
+  const openaiVendor = getVendor("openai")
   const openai = await store.get("openai")
-  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key, vendor: getVendor("openai"), fetchImpl }), providerName: "openai", model: getVendor("openai")?.defaultModel ?? "gpt-4o-mini", connected: true, fetchImpl }
+  if (openai) {
+    const fetchImpl = vendorFetch(openaiVendor, config)
+    return { provider: new OpenAIProvider({ apiKey: openai.key, vendor: openaiVendor, fetchImpl }), providerName: "openai", model: openaiVendor?.defaultModel ?? "gpt-4o-mini", connected: true, fetchImpl }
+  }
+  const anthropicVendor = getVendor("anthropic")
   const anthropic = await store.get("anthropic")
-  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key, vendor: getVendor("anthropic"), fetchImpl }), providerName: "anthropic", model: getVendor("anthropic")?.defaultModel ?? "claude-sonnet-4-5", connected: true, fetchImpl }
+  if (anthropic) {
+    const fetchImpl = vendorFetch(anthropicVendor, config)
+    return { provider: new AnthropicProvider({ apiKey: anthropic.key, vendor: anthropicVendor, fetchImpl }), providerName: "anthropic", model: anthropicVendor?.defaultModel ?? "claude-sonnet-4-5", connected: true, fetchImpl }
+  }
   return {
     provider: mockHint("No provider credentials found. Run /connect to add a key — replying in mock mode until then."),
     providerName: "mock", model: "mock", connected: false,
@@ -174,11 +180,9 @@ export async function main(argv: string[]): Promise<number> {
   const runtime = await createRuntime({ mock, allowDanger, config: readConfig(), store })
 
   if (!headless) {
-    const fetchImpl = runtime.fetchImpl
-    const proxiedFetcher = fetchImpl
-      ? (vendor: Parameters<typeof fetchModels>[0], key: string) => fetchModels(vendor, key, fetchImpl)
-      : fetchModels
-    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected, runtime, store, fetcher: proxiedFetcher })
+    const config = readConfig()
+    const fetcher = (vendor: Parameters<typeof fetchModels>[0], key: string) => fetchModels(vendor, key, vendorFetch(vendor, config))
+    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected, runtime, store, fetcher })
     return 0
   }
   if (!runtime.connected && !mock) {

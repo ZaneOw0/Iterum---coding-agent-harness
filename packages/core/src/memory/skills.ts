@@ -43,6 +43,7 @@ export function buildSkillSection(skills: Skill[]): string {
 export class ReadSkillTool implements Tool {
   name = "read_skill"
   description = "Read the full body of a registered skill by name"
+  parameters = { type: "object", properties: { name: { type: "string" } }, required: ["name"] }
   constructor(private skills: Skill[]) {}
   async execute(call: ToolCall): Promise<ToolResult> {
     const { name } = call.args as { name: string }

@@ -1,6 +1,6 @@
 import type { LLMProvider } from "../llm/types"
 import type { EffortLevel } from "../llm/vendors"
-import type { ToolRegistry } from "../tools/types"
+import type { ToolRegistry } from "../tools/registry"
 import { PermissionGateway } from "../permission/gateway"
 import { VerifyRunner, formatFeedback } from "../feedback/verify"
 import { buildSkillSection, type Skill } from "../memory/skills"
@@ -40,6 +40,10 @@ export class AgentLoop {
         model: session.model, system: this.systemPrompt(session),
         messages: session.messages.slice(0, -1).map(m => ({ role: m.role, content: this.render(m) })),
         effort: this.deps.effort,
+        tools: this.deps.tools.list().map(t => ({
+          type: "function" as const,
+          function: { name: t.name, description: t.description, parameters: t.parameters ?? { type: "object", properties: {} } },
+        })),
       }
 
       let hadToolCall = false

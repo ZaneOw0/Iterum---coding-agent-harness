@@ -4,13 +4,67 @@ import type { Duplex } from "node:stream"
 
 export interface ProxyTarget { host: string; port: number }
 
-type BodyState =
-  | { kind: "headers"; buf: Buffer }
-  | { kind: "chunk-size"; buf: Buffer }
-  | { kind: "chunk-data"; remaining: number }
+type BodyState = { kind: "headers"; buf: Buffer } | { kind: "body" }
+
+export type BodyFraming =
+  | { kind: "chunked" }
   | { kind: "content-length"; remaining: number }
   | { kind: "close" }
-  | { kind: "done" }
+
+export interface BodyDecoder { feed(data: Buffer): void; finish(): void }
+
+// 响应体成帧解码器（纯函数，可逐字节喂入单测）：
+// pending 缓冲法——任何不足字节数的数据都留在 buf 等下一块，
+// 绝不部分 enqueue、绝不产生负 remaining；CRLF 可任意分裂。
+export function createBodyDecoder(framing: BodyFraming, onData: (chunk: Uint8Array) => void, onDone: () => void): BodyDecoder {
+  let buf: Buffer = Buffer.alloc(0)
+  let remaining = framing.kind === "content-length" ? framing.remaining : 0
+  let needSizeLine = framing.kind === "chunked"
+  let finished = false
+  return {
+    feed(data: Buffer) {
+      if (finished || data.length === 0) return
+      buf = buf.length === 0 ? data : Buffer.concat([buf, data])
+      if (framing.kind === "chunked") {
+        for (;;) {
+          if (needSizeLine) {
+            const idx = buf.indexOf("\r\n")
+            if (idx < 0) return
+            const hex = buf.subarray(0, idx).toString("latin1").split(";")[0]?.trim() ?? ""
+            const size = parseInt(hex, 16)
+            buf = buf.subarray(idx + 2)
+            if (!Number.isFinite(size) || size === 0) {
+              // 终止块：忽略后续 trailer，正文到此为止
+              finished = true
+              onDone()
+              return
+            }
+            remaining = size
+            needSizeLine = false
+          }
+          // 需 size+2 字节齐（数据+CRLF）才消费，不足则等待下一块
+          if (buf.length < remaining + 2) return
+          onData(buf.subarray(0, remaining))
+          buf = buf.subarray(remaining + 2)
+          needSizeLine = true
+        }
+      } else if (framing.kind === "content-length") {
+        if (buf.length < remaining) return
+        onData(buf.subarray(0, remaining))
+        finished = true
+        onDone()
+        return
+      }
+      onData(buf)
+      buf = Buffer.alloc(0)
+    },
+    finish() {
+      if (finished) return
+      finished = true
+      onDone()
+    },
+  }
+}
 
 async function bodyToBuffer(body: BodyInit | null | undefined): Promise<Buffer> {
   if (body === null || body === undefined) return Buffer.alloc(0)
@@ -52,25 +106,41 @@ export function createProxiedFetch(proxy: ProxyTarget, options?: { rejectUnautho
     let controller: ReadableStreamDefaultController<Uint8Array> | null = null
     let state: BodyState = { kind: "headers", buf: Buffer.alloc(0) }
     let tsock: Duplex | null = null
+    let framing: BodyFraming | null = null
+    let decoder: BodyDecoder | null = null
+    let finished = false
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
 
     const finish = (err?: Error) => {
-      if (state.kind === "done") return
-      if (err) { state = { kind: "done" }; controller?.error(err); socket.destroy(); return }
-      state = { kind: "done" }
+      if (finished) return
+      finished = true
+      if (idleTimer) clearTimeout(idleTimer)
+      if (err) { controller?.error(err); socket.destroy(); return }
       controller?.close()
       socket.destroy()
     }
 
     const fail = (err: Error) => {
       socket.destroy()
+      if (idleTimer) clearTimeout(idleTimer)
       if (!settled) { settled = true; reject(err) }
       else finish(err)
+    }
+
+    // 空闲超时：每收到数据重置，超时判定服务端半途断流，防卡死
+    const resetIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => fail(new Error("proxy response idle timeout")), 120000)
     }
 
     socket.on("error", fail)
     socket.on("close", () => {
       if (!settled) { settled = true; reject(new Error("proxy closed connection")) }
-      else finish(state.kind === "close" || state.kind === "done" ? undefined : new Error("connection closed before response complete"))
+      else if (!finished) {
+        if (framing?.kind === "close" && decoder) decoder.finish()
+        else if (framing === null) finish()
+        else finish(new Error("connection closed before response complete"))
+      }
     })
 
     const onAbort = () => { socket.destroy(); if (!settled) { settled = true; reject(new Error("request aborted")) } else finish(new Error("request aborted")) }
@@ -100,7 +170,7 @@ export function createProxiedFetch(proxy: ProxyTarget, options?: { rejectUnautho
       tsock = sock
       sock.on("error", fail)
 
-      const enqueue = (chunk: Uint8Array) => { if (controller && state.kind !== "done") controller.enqueue(chunk) }
+      const enqueue = (chunk: Uint8Array) => { if (controller && !finished) controller.enqueue(chunk) }
 
       const parseHeaders = (buf: Buffer): Buffer | undefined => {
         const s = buf.toString("latin1")
@@ -121,61 +191,32 @@ export function createProxiedFetch(proxy: ProxyTarget, options?: { rejectUnautho
           if (k === "transfer-encoding" && v.toLowerCase().includes("chunked")) chunked = true
         }
         const noBody = (method === "HEAD" || code === 204 || code === 304) && !chunked && contentLength === undefined
-        state = noBody
-          ? { kind: "done" }
-          : chunked ? { kind: "chunk-size", buf: Buffer.alloc(0) }
-          : contentLength !== undefined && Number.isFinite(contentLength) ? { kind: "content-length", remaining: contentLength }
+        state = { kind: "body" }
+        framing = noBody
+          ? null
+          : chunked ? { kind: "chunked" }
+          : contentLength !== undefined && Number.isFinite(contentLength) && contentLength > 0 ? { kind: "content-length", remaining: contentLength }
           : { kind: "close" }
+        if (framing) decoder = createBodyDecoder(framing, enqueue, () => finish())
 
         const bodyStream = new ReadableStream<Uint8Array>({
           start(c) { controller = c },
-          cancel() { if (state.kind !== "done") finish() },
+          cancel() { if (!finished) finish() },
         })
         settled = true
         clearTimeout(handshakeTimer)
-        resolve(new Response(state.kind === "done" ? null : bodyStream, { status: code || 200, headers: respHeaders }))
+        resetIdle()
+        resolve(new Response(framing === null ? null : bodyStream, { status: code || 200, headers: respHeaders }))
         return buf.subarray(idx + 4)
       }
 
       const feedBody = (chunk: Buffer) => {
-        if (chunk.length === 0 || state.kind === "done") return
-        if (state.kind === "close") { enqueue(chunk); return }
-        if (state.kind === "content-length") {
-          const take = Math.min(state.remaining, chunk.length)
-          if (take > 0) enqueue(chunk.subarray(0, take))
-          state.remaining -= take
-          if (state.remaining <= 0) finish()
-          return
-        }
-        // chunked：先解析 16 进制长度行，再按块消费；剩余字节在循环内继续
-        let buf = state.kind === "chunk-size" ? Buffer.concat([state.buf, chunk]) : chunk
-        let remaining = state.kind === "chunk-data" ? state.remaining : 0
-        for (;;) {
-          if (remaining === 0) {
-            const idx = buf.indexOf("\r\n")
-            if (idx < 0) { state = { kind: "chunk-size", buf }; return }
-            const hex = buf.subarray(0, idx).toString("latin1").split(";")[0]?.trim() ?? ""
-            const size = parseInt(hex, 16)
-            buf = buf.subarray(idx + 2)
-            if (!Number.isFinite(size) || size === 0) {
-              // 终止块：丢弃 trailer（若有），正文到此为止
-              finish()
-              return
-            }
-            remaining = size
-          }
-          if (buf.length < remaining + 2) {
-            state = { kind: "chunk-data", remaining: remaining - buf.length }
-            if (buf.length > 0) enqueue(buf)
-            return
-          }
-          enqueue(buf.subarray(0, remaining))
-          buf = buf.subarray(remaining + 2)
-          remaining = 0
-        }
+        if (chunk.length === 0 || finished) return
+        decoder?.feed(chunk)
       }
 
       const feed = (chunk: Buffer) => {
+        resetIdle()
         if (state.kind === "headers") {
           const rest = parseHeaders(Buffer.concat([state.buf, chunk]))
           if (rest === undefined) return

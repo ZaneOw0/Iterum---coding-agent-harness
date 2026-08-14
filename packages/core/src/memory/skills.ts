@@ -21,11 +21,11 @@ export class SkillCatalog {
       const skillFile = join(p, "SKILL.md")
       if (!existsSync(skillFile)) continue
       const raw = readFileSync(skillFile, "utf8")
-      const fm = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+      const fm = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
       if (!fm) continue
       const meta: Record<string, string> = {}
-      for (const line of fm[1]!.split("\n")) {
-        const m = line.match(/^([a-zA-Z_]+):\s*(.*)$/)
+      for (const line of fm[1]!.split(/\r?\n/)) {
+        const m = line.match(/^([a-zA-Z_]+):\s*(.*?)\r?$/)
         if (m && m[1]) meta[m[1]] = m[2] ?? ""
       }
       if (!meta.name) continue

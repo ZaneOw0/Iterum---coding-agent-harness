@@ -105,6 +105,28 @@
 
 ---
 
+## 5. 实现轮次的流程偏离与裁决
+
+> 来源：SDD ledger（`.superpowers/sdd/PLAN.md/*`：progress.md、各 task-*-brief/report/review-package.md，git-ignored 过程记录）。实现阶段（T1–T22 + fix-11）在 subagent-driven-development（每 task 新鲜 implementer + 两阶段评审）下的偏离与裁决如下。
+
+1. **环境限制与替代**：task 工具无 model 参数，SDD Model Selection 的分级选模型无法执行——统一使用 general 子代理（ledger 前置记录）；SDD 的 POSIX 脚本在本机以 PowerShell 等价操作替代（brief 抽取、diff 打包），行为等价并记录于 ledger。Windows 本机无 make，各 task 以 `bun test`（Makefile `test` 目标本体）验证。
+2. **subagent 派发中断与恢复**：上会话末段 subagent 派发连续失败，会话中断；新会话恢复后重试成功。期间 controller 本地完成评审并记 ledger 偏离（评审路径以 controller 本地执行为替代）。
+3. **裁决记录**：
+   - T22 argv 路由缺陷（controller 确认，评审未报）：修复中实测 Bun 1.3.14 编译产物 `argv=["bun", 可执行文件, ...参数]`（脚本模式为 `[bun路径, 脚本路径, ...参数]`），`appArgs` 以 `argv.indexOf(mainPath)` 定位参数起点，三形状探针全绿。
+   - T19 提交信息英文（brief 原文 verbatim）与"提交全中文"约定冲突 → 约定优先，fix round 中 amend 为全中文（分支未推送，历史改写安全）。
+   - SPEC R8"截图归档" → 以 GitHub Actions run 永久链接归档（GitLab 无实例；R8 允许"记录链接"）。
+   - `.gitlab-ci.yml` 静态满足 R7：无 GitLab 实例无法动态执行，逐字静态核对 + 由 GitHub Actions 等效覆盖（同一 make test/make demo 命令集）。
+   - T9 brief 内部矛盾（render 透传 `tool` 与 T8 formatFeedback 模板、brief 自身测试 3 冲突）→ 以 SPEC §5.3.2 为准只透传 exitCode（一处必要偏离）。
+   - T15 react ^19 与 ink 5 运行时崩溃 → 降级 react 18.3.1 并补 core 的 `types`/`exports`（B.1 D20 登记）。
+   - fix-11：Windows autocrlf 下 SKILL.md frontmatter 解析失效 → 独立修复分支（PR #11）先行合并，CRLF 回归测试入 memory.test.ts。
+   - T18：T14 合入的 main.ts 缺入口调用（T14 评审漏网）→ 编译产物实测为 no-op（exit 0 零输出），+2 行入口调用修复。
+   - T12：brief Content-Length 帧协议与 SDK 1.30.0 NDJSON 冲突 → fixture 双协议兼容，以安装版本为准。
+   - 并行组 B1 合并时 index.ts 导出区冲突 → controller 逐分支 rebase 解决（无业务改动）。
+4. **评审统计**：T19 评审 3 Important（README 虚假真实 provider 命令、--from-stdin 双重错误、不存在的 ITERUM_FEEDBACK_THRESHOLD）+ 6 minor；T22 评审 2 Important + 1 controller 确认缺陷（argv 路由）；各 1 轮 fix round 全绿（合并后全量 64/64）；T20 评审无 Critical/Important。
+5. **"逐字 brief"的边界**：多个 brief 存在逐字不可编译或内部自相矛盾（测试 helper 语法错误、缺 import、掩码期望位数矛盾、编码损毁等），各 task 统一按"最小修正 + 报告中披露"处理，测试主体逐字保留。
+
+---
+
 ## 6. 冷启动试运行（§4.5 自我验证）
 
 ### 6.1 实验设置

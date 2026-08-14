@@ -19,6 +19,8 @@ export type { SessionEvent } from "./transcript/events"
 export { createSession, appendPart } from "./transcript/session"
 export type { LLMEvent, ChatMessage, ChatRequest, LLMProvider, MockStep } from "./llm/types"
 export { MockProvider } from "./llm/mock"
+export { OpenAIProvider } from "./llm/openai"
+export { AnthropicProvider } from "./llm/anthropic"
 
 export { CredentialStore, maskKey } from "./credentials/store"
 export type { ProviderCredential } from "./credentials/store"

@@ -1,11 +1,9 @@
 import { CredentialStore, maskKey } from "@iterum/core/credentials/store"
-
-type Provider = "openai" | "anthropic"
-const PROVIDERS: Provider[] = ["openai", "anthropic"]
+import { VENDORS } from "@iterum/core/llm/vendors"
 
 export async function runConnect(argv: string[]): Promise<number> {
-  const provider = argv[0] as Provider
-  if (!PROVIDERS.includes(provider)) return 2
+  const provider = argv[0] as string
+  if (!VENDORS[provider]) return 2
   const store = new CredentialStore()
 
   if (argv.includes("--set")) {

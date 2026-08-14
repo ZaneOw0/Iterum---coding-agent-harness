@@ -63,6 +63,12 @@
 
 ## 2026-08-14（续）
 
+### P-9：开发阶段工作流约定（业主指示）
+- **Task**：P-9
+- **人工干预**：业主明确指示——**开发一律从 main 拉新 worktree，按 PLAN 依赖图/并行组的并行度自动创建 worktree 开发；禁止直接在 main 分支上开发**。每个 task 一个分支（`task/NN-xxx`），完成后经 PR 合入 main；并行组（B1/B2 等）同时开多个 worktree。冷启动验证 worktree（`verify/00-cold-start`）在完成使命后清理。
+- **提交/推送边界**（沿用业务总览）：worktree 内的任务级 commit（TDD 红绿证据，PLAN 强制"每 task 单提交"）由 subagent 本地执行；**push / PR 创建 / merge 均须业主审批**后执行。
+- **执行模式**：superpowers:subagent-driven-development（每 task 派新鲜 implementer + 两阶段评审 + ledger 记账）。
+
 ### P-8：§4.5 冷启动试运行验证
 - **Task**：P-8（对应业务总览 §4.5 自我验证要求）
 - **技能**：无（subagent 派发；方法为 Superpowers 冷启动验证模式）

@@ -80,9 +80,13 @@ export function coreVersion(): string {
 {
   "name": "@iterum/core",
   "version": "0.1.0",
-  "module": "src/index.ts"
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": { "./*": "./src/*" }
 }
 ```
+
+> 注：`types`/`exports` 字段是 tsc 深导入（`@iterum/core/llm/mock`）解析的必要条件（T15 评审验证，缺失即 TS2307）。
 
 `packages/tui/package.json`：
 
@@ -91,10 +95,12 @@ export function coreVersion(): string {
   "name": "@iterum/tui",
   "version": "0.1.0",
   "module": "src/App.tsx",
-  "dependencies": { "ink": "^5.2.0", "react": "^19.0.0", "@iterum/core": "workspace:*" },
-  "devDependencies": { "ink-testing-library": "^4.0.0", "@types/react": "^19.0.0" }
+  "dependencies": { "ink": "^5.2.0", "react": "^18.3.1", "@iterum/core": "workspace:*" },
+  "devDependencies": { "ink-testing-library": "^4.0.0", "@types/react": "^18.3.0" }
 }
 ```
+
+> 注：react 固定 18.x——ink 5.2.x 的 react-reconciler 0.29 仅支持 React 18 内部 API（React 19 运行时崩溃，T15 实测验证；ink 6 才支持 19）。
 
 `packages/cli/package.json`：
 
@@ -1846,7 +1852,8 @@ git commit -m "feat(cli): entry point with headless json event stream"
 **目标：** Ink 渲染骨架（SPEC §3.11）：语义化主题 token + Session 五层布局 + part renderer（含 Thinking 折叠）。
 
 **涉及文件：**
-- Create: `packages/tui/package.json`、`packages/tui/src/theme.ts`、`packages/tui/src/App.tsx`、`packages/tui/src/components/Transcript.tsx`、`packages/tui/src/components/MessageView.tsx`、`packages/tui/src/components/ReasoningPartView.tsx`、`packages/tui/src/components/ToolPartView.tsx`、`packages/tui/test/transcript.test.tsx`
+- Create: `packages/tui/package.json`、`packages/tui/src/theme.ts`、`packages/tui/src/App.tsx`、`packages/tui/src/components/Transcript.tsx`、`packages/tui/src/components/MessageView.tsx`、`packages/tui/test/transcript.test.tsx`
+- 注：ReasoningPart/ToolPart 渲染内联于 MessageView.tsx（PartView），不单独建文件（T15 评审 Ruling）；快照 fixture 的 Session 必须含 createdAt/updatedAt（T3 契约）。
 
 **Interfaces:**
 - Consumes: T3 `Session`/`Message`/`Part`。

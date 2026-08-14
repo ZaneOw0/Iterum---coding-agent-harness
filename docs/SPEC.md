@@ -417,6 +417,7 @@ CredentialEntry { provider, source: "keychain"|"env", status: set|unset }  # 永
 | D17 | §3.3 工具清单与 VerifyRunner 职责重叠 | SPEC 工具清单收敛为 read/write/bash |
 | D18 | T1 缺 tsconfig/tui-cli package.json 内容 | PLAN T1 补齐工程配置 |
 | D19 | T16 仅 prose、demo2/3 仅"同构" | PLAN 补全代码级步骤 |
+| D20 | ink 5.2 与 react ^19 不兼容（运行时崩溃）；core 包缺 exports 字段致深导入 TS2307 | react 固定 ^18.3.1；core package.json 补 `types`/`exports`（T15 评审验证） |
 
 ### B.2 M2 后置清单（M1 明确豁免，实现前需回看本表）
 
@@ -440,3 +441,6 @@ CredentialEntry { provider, source: "keychain"|"env", status: set|unset }  # 永
 | E16 | oxlint | §9 | M2 |
 | E17 | 黑名单"删除 .git"规则 | §3.4 | M2 补 pattern |
 | E18 | partId 事件定位（Part.id） | §3.7 | M1 partId 恒空串，TUI 按消息级重渲染 |
+| E19 | 工具路径 `..` 越界拒绝 | §3.3 | M2（B1 评审发现无 M1 task 承接） |
+| E20 | bash 命令 120s 超时强制终止 | §3.3 | M2（同上） |
+| E21 | frontmatter 告警与 CRLF 兼容 | §3.6 | M2（M1 仅跳过；CRLF SKILL.md 静默跳过） |

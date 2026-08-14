@@ -107,6 +107,13 @@
 | T20 | 事实核对（无单测） | GitLab CI 补齐 artifacts 块 + Actions 证据归档 | `98955c9`；PR #24 | 无 | 无 Critical/Important；R8 截图归档以 run 永久链接替代（GitLab 无实例，R8 允许"记录链接"） |
 | T21 | TDD | /connect 凭据交互四路径（set/show/clear/未知名）+ TTY 隐藏输入 | `460569b`；PR #20 | 无 | brief 测试 helper 语法错误最小修复（箭头函数加括号），用例本体逐字 |
 | T22 | TDD | TUI 接线——事件流驱动 transcript 渲染（验收标准 1 闭环） | `8ab088d` + `5d3bd65`；PR #23 | **controller 确认 argv 路由缺陷（评审未报）** → fix round F3 | **双写修复**：`assistant_started` 解耦 + `run()` 入口浅拷贝（集成测试先红后绿）；Bun 1.3.14 编译产物 argv=["bun", exe, ...args]，appArgs 以 `indexOf(mainPath)` 定位，三形状探针全绿 |
+| T23 | 文档核对（无单测） | 交付物收尾：AGENT_LOG 实现阶段表补记 T1-T22、SPEC_PROCESS §5、README/checklist 勘误 7 处 | `2f88fd4` + `b6c1abf`；PR #25 | 评审 1 Important（README 三处 TUI 接线过期表述）+ controller 追加 F4（checklist 表头/MUST-6 过期）→ 1 轮 fix round 4/4 | 文档失实常源于"修复时点核对过、上游合并后过期"——收尾必须对照最终代码再核一遍 |
+| T24 | 修复波（TDD×2 项） | 最终评审修复：README provider 表述、reduceSession 补 tool/permission/feedback 归约、B.2 补 E22-E25、AGENT_LOG 回填 | `e5a14cf`；PR #26 | 最终整分支评审 4 项 + 3 minor 裁决（驳回 --from-stdin 命名/根依赖放置/cmd.split → M2） | 评审实测订正 deferred 项（"user 消息不入 TUI"实为已入）；controller 裁决勿在评审外自行扩展范围 |
+| T25 | TDD | slash 计划：厂商注册表（8 家）+ fetchModels 模型列表拉取 | `9a3a884`（docs）+ `8439882`；PR #27 | 无 | 7 家 OpenAI 兼容 + anthropic 原生，零新 SDK；effort 映射/白名单收敛为纯数据注册表 |
+| T26 | TDD | provider effort 透传 + reasoning_content 流解析 | `1fb1407`；PR #28 | 无 | deepseek/glm/qwen 思维链在 `delta.reasoning_content`，不解析则 effort 调了也看不到思考 |
+| T27 | TDD | ~/.iterum/config.json 存储 + createRuntime 组装重构 | `801b1c6`；PR #29 | 裁决 R1（rebuild 无 key 切模型返回 0、切厂商拒绝）、R2（keyring mock + home 注入防污染真实配置） | main(argv) 行为逐路径回归；本机钥匙串有真实 key，测试必须 mock keyring |
+| T28+T29 | 最小测试（用户指令） | slash UI 接线：ConnectWizard/ModelPicker/EffortPicker + DialogHost 挂载 + cli slash 路由与状态机 | `b95342e`；PR #30 | **用户加急指令：跳过评审、精简测试**（记入 ledger 偏离） | DialogHost 挂载后 Composer 必须 disabled 防输入广播冲突（ink useInput 全局广播） |
+| 修复 | 实机 bug | Composer 提交键绑定从未生效：Ctrl+Enter 在 Windows ConPTY 不可区分 → Enter 发送 / Ctrl+J 换行 | `2d6f915`；随 PR #30 | **M1 真 TTY 从未验证的代价**：T15 的绑定在任何平台都无法触发，实机演示 5 分钟内暴露 | 交互类组件必须有 stdin 模拟测试（ink-testing-library `stdin.write`），渲染断言不够 |
 
 ## CI/CD 执行记录
 

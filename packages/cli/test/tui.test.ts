@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { driveSession, reduceSession } from "../src/tui"
+import { driveSession, reduceSession, routeSlash } from "../src/tui"
 import { createSession } from "@iterum/core/transcript/session"
 import type { SessionEvent } from "@iterum/core/transcript/events"
 import type { Session } from "@iterum/core/transcript/types"
@@ -127,5 +127,19 @@ describe("driveSession", () => {
     expect(fbPart).toMatchObject({
       type: "feedback", verifier: "bun test", status: "fail", summary: "1 failed: auth", failureIndex: 2,
     })
+  })
+})
+
+describe("routeSlash", () => {
+  test("识别三条指令（容忍首尾空白）", () => {
+    expect(routeSlash("/connect")).toBe("connect")
+    expect(routeSlash("  /model ")).toBe("model")
+    expect(routeSlash("/effort")).toBe("effort")
+  })
+
+  test("未知 slash 与普通文本返回 null", () => {
+    expect(routeSlash("/status")).toBeNull()
+    expect(routeSlash("hello world")).toBeNull()
+    expect(routeSlash("")).toBeNull()
   })
 })

@@ -62,8 +62,8 @@ iterum --headless --mock --allow --prompt "..."   # --allow 显式放行危险�
 iterum connect openai --set               # 凭据录入（隐藏输入）/ --show 掩码查看 / --clear 清除
 ```
 
-- TUI：T22 已完成接线——TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动 AgentLoop 事件流；非 TTY 启动提示使用 `--headless`（exit 0）。Permission Dialog 挂载（DialogHost 尚未接入 `<App>`）与真 TTY 体验打磨为后续任务。
-- slash 命令（`/status` `/model` `/skills` `/mcp`）为 M2（SPEC §4.3 键盘优先要求）；M1 的凭据交互通道为 `iterum connect` 子命令（等价于 `/connect` 的四操作）。
+- TUI：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动 AgentLoop 事件流；非 TTY 启动提示使用 `--headless`（exit 0）。Permission 弹窗（PermissionDialog 尚未接入 `<App>`、composer 未在审批期间阻塞）为后续任务。
+- 支持 8 家厂商：OpenAI / Anthropic / Gemini（官方 OpenAI 兼容端点）/ xAI Grok / Moonshot Kimi / DeepSeek / 智谱 GLM / 阿里通义千问。TUI 内 slash 指令：`/connect`（向导式连接：选厂商 → 输 key → 实时拉取模型列表 → 选模型）、`/model`（切换模型）、`/effort`（思考强度四档，按厂商官方机制映射；不支持的厂商显示"不支持"）。**按键：Enter 发送、Ctrl+J 换行**。配置持久化于 `~/.iterum/config.json`（key 仍只进 OS 钥匙串）。
 
 ### Key 如何安全配置（目标机器）
 
@@ -132,7 +132,7 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 ## 已知限制
 
 - Windows 二进制未签名（SmartScreen 拦截）；容器内无 OS 钥匙串（key 只能经 `.env` 挂载注入）；仅 Windows Terminal/现代终端完整支持 TUI，旧 console 降级纯文本。
-- TUI 已接线但不完整：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动事件流；Permission Dialog 尚未挂载（DialogHost 未接入 `<App>`），真 TTY 体验打磨为后续任务。
+- TUI 已接线但不完整：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动事件流，slash 向导对话框经 DialogHost 挂载；Permission 弹窗（PermissionDialog 未接入 `<App>`、审批期间不阻塞 composer）与真 TTY 体验打磨为后续任务。
 - `--headless` 真实 provider 需凭据与网络：未配置凭据时报错退出（exit 1，引导 `iterum connect --set`）；配置凭据后启用真实 provider（OpenAI/Anthropic），需网络可达与有效 API key——离线/无凭据环境请用 `--mock`。
-- slash 命令（`/status` `/model` 等）、`new/list/resume` 会话管理、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
+- slash 指令已实现 `/connect` `/model` `/effort`；`/status` `/skills` `/mcp`、`new/list/resume` 会话管理、`--model/--provider` CLI 参数、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
 - MCP HTTP/SSE transport 为实验项；lint/typecheck 验证集、结构化日志、ProviderError 重试体系为 M2。

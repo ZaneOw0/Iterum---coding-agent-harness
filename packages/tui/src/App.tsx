@@ -1,10 +1,9 @@
 import React from "react"
-import { Box, useStdout } from "ink"
+import { Box } from "ink"
 import type { Session } from "@iterum/core/transcript/types"
 import { Transcript } from "./components/Transcript"
 import { Composer } from "./components/Composer"
 import { Footer } from "./components/Footer"
-import { Sidebar } from "./components/Sidebar"
 import { ConnectWizard, type ConnectWizardProps } from "./components/ConnectWizard"
 import { ModelPicker, type ModelPickerProps } from "./components/ModelPicker"
 import { EffortPicker, type EffortPickerProps } from "./components/EffortPicker"
@@ -21,17 +20,10 @@ export function App(props: {
   effortProps?: EffortPickerProps
 }) {
   const { session, onSubmit = () => {}, connected = true, dialog = null, modelLabel, composerStatus, connectProps, modelProps, effortProps } = props
-  const { stdout } = useStdout()
-  const wide = (stdout?.columns ?? 80) > 120
   return (
     <Box flexDirection="column">
-      <Box flexDirection="row">
-        {wide ? <Sidebar session={session} /> : null}
-        <Box flexDirection="column" flexGrow={1}>
-          <Transcript session={session} />
-          <Composer onSubmit={onSubmit} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={modelLabel ?? session.model} status={composerStatus} disabled={dialog != null} />
-        </Box>
-      </Box>
+      <Transcript session={session} />
+      <Composer onSubmit={onSubmit} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={modelLabel ?? session.model} status={composerStatus} disabled={dialog != null} />
       {dialog === "connect" && connectProps
         ? <ConnectWizard {...connectProps} />
         : dialog === "model" && modelProps

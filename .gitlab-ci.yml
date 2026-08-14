@@ -5,3 +5,6 @@ unit-test:
     - bun install --frozen-lockfile
     - make test
     - make demo
+  artifacts:
+    when: always
+    paths: []

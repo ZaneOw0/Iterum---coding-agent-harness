@@ -1,6 +1,7 @@
 {
   "name": "iterum",
   "private": true,
+  "bin": { "iterum": "packages/cli/src/main.ts" },
   "workspaces": ["packages/*"],
   "devDependencies": {
     "@types/bun": "^1.3.14"

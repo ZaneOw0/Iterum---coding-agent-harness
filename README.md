@@ -37,10 +37,10 @@ Iterum 是一个 **CLI-only** 的 coding agent（类 Claude Code / opencode）�
 
 ```bash
 docker build -t iterum:latest .
-docker run -it -w /app -v $PWD/.env:/app/.env -v $PWD:/workspace iterum:latest
+docker run -it -w /workspace -v $PWD/.env:/workspace/.env -v $PWD:/workspace iterum:latest
 ```
 
-> 容器内无 OS 钥匙串：key 只能经 `.env` 挂载注入（明文风险见下）；`-w /app` 将容器 cwd 对齐挂载点——程序从 cwd 加载 `.env`。
+> 容器内无 OS 钥匙串：key 只能经 `.env` 挂载注入（明文风险见下）；`-w /workspace` 使容器 cwd 与项目挂载点一致——agent 在项目目录工作，程序从 cwd 加载 `.env`。
 
 ### 源码
 
@@ -57,7 +57,7 @@ make test
 
 ```bash
 iterum --headless --mock --prompt "..."   # 无头模式，事件流 JSON 行输出（CI/脚本/机制演示）
-# 真实 provider 未接线：不加 --mock 会报错退出（exit 1），配置凭据也不会启用——为后续任务（见"已知限制"）
+# 未配置凭据时 --headless 报错退出（exit 1）；配置凭据后启用真实 provider（OpenAI/Anthropic）；--mock 强制 mock（确定性演示，无网络依赖）
 iterum --headless --mock --allow --prompt "..."   # --allow 显式放行危险动作（headless 默认拒绝；须配合 --headless 使用）
 iterum connect openai --set               # 凭据录入（隐藏输入）/ --show 掩码查看 / --clear 清除
 ```
@@ -133,6 +133,6 @@ CI：`.gitlab-ci.yml`（`unit-test` job）+ `.github/workflows/ci.yml`（每次 
 
 - Windows 二进制未签名（SmartScreen 拦截）；容器内无 OS 钥匙串（key 只能经 `.env` 挂载注入）；仅 Windows Terminal/现代终端完整支持 TUI，旧 console 降级纯文本。
 - TUI 已接线但不完整：TTY 下渲染 `<App>`（Transcript / Composer / Footer / Sidebar），Composer 提交驱动事件流；Permission Dialog 尚未挂载（DialogHost 未接入 `<App>`），真 TTY 体验打磨为后续任务。
-- `--headless` 未接真实 provider：当前仅 `--mock` 可用，不加 `--mock` 即报错退出（exit 1，即使已配置凭据）；真实 provider 接线为后续任务。
+- `--headless` 真实 provider 需凭据与网络：未配置凭据时报错退出（exit 1，引导 `iterum connect --set`）；配置凭据后启用真实 provider（OpenAI/Anthropic），需网络可达与有效 API key——离线/无凭据环境请用 `--mock`。
 - slash 命令（`/status` `/model` 等）、`new/list/resume` 会话管理、session timeline / fork / compact 为里程碑 2（SPEC 附录 B）。
 - MCP HTTP/SSE transport 为实验项；lint/typecheck 验证集、结构化日志、ProviderError 重试体系为 M2。

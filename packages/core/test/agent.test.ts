@@ -6,6 +6,7 @@ import { PermissionGateway } from "../src/permission/gateway"
 import { VerifyRunner, formatFeedback } from "../src/feedback/verify"
 import { createSession } from "../src/transcript/session"
 import type { Tool } from "../src/tools/types"
+import type { LLMEvent, LLMProvider } from "../src/llm/types"
 
 async function drain(loop: AgentLoop, session: any, input: string) {
   const events: any[] = []
@@ -103,6 +104,27 @@ describe("AgentLoop", () => {
     expect(events.at(-1)?.type).toBe("session_idle")
     const lastMsg = s.messages.at(-1)!
     expect(lastMsg.parts.some(p => p.type === "text" && p.text.includes("help"))).toBe(true)
+  })
+
+  test("reasoning deltas keep the part duration advancing (time.end tracks the stream)", async () => {
+    const slowReasoning: LLMProvider = {
+      complete: async function* (): AsyncIterable<LLMEvent> {
+        yield { type: "reasoning_delta", text: "step 1" }
+        await Bun.sleep(15)
+        yield { type: "reasoning_delta", text: "step 2" }
+        await Bun.sleep(15)
+        yield { type: "text_delta", text: "done" }
+        yield { type: "done" }
+      },
+    }
+    const loop = new AgentLoop({ provider: slowReasoning, tools: new ToolRegistry(), permissions: new PermissionGateway(), verify: passVerify, resolvePermission: alwaysAllow })
+    const s = createSession({ cwd: "C:/proj", title: "t", provider: "mock", model: "mock" })
+    await drain(loop, s, "hi")
+    const reasoning = s.messages.flatMap(m => m.parts).find(p => p.type === "reasoning")
+    if (!reasoning || reasoning.type !== "reasoning") throw new Error("no reasoning part")
+    expect(reasoning.markdown).toBe("step 1step 2")
+    expect(reasoning.time.end).toBeGreaterThanOrEqual(reasoning.time.start)
+    expect(reasoning.time.end - reasoning.time.start).toBeGreaterThanOrEqual(15)
   })
 
   test("permission ask invokes resolvePermission; deny breaks loop and does NOT enter feedback retry", async () => {

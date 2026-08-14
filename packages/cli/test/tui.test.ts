@@ -80,4 +80,52 @@ describe("driveSession", () => {
     const last = updates.at(-1)!
     expect(last.messages.at(-1)).toMatchObject({ role: "assistant", parts: [{ type: "text", text: "ok" }] })
   })
+
+  test("tool_started/tool_completed 归约出 state/result 正确的 tool part", async () => {
+    const fake = {
+      run: async function* (_s: Session, _t: string): AsyncIterable<SessionEvent> {
+        yield { type: "assistant_started", messageId: "m1" }
+        yield { type: "tool_started", messageId: "m1", partId: "", tool: "bash", args: { command: "bun test" } }
+        yield { type: "tool_completed", messageId: "m1", partId: "", result: { ok: true, output: "64 pass", durationMs: 632 } }
+      },
+    }
+    const updates: Session[] = []
+    const error = await driveSession(fake, s0, "run tests", s => updates.push(s))
+    expect(error).toBeNull()
+    const runningPart = updates[1]!.messages.at(-1)!.parts.at(-1)!
+    expect(runningPart).toMatchObject({ type: "tool", tool: "bash", args: { command: "bun test" }, state: "running" })
+    const runningTime = (runningPart as { time: { start: number; end: number } }).time
+    expect(runningTime.start).toBeGreaterThan(0)
+    expect(runningTime.end).toBe(0)
+    const donePart = updates[2]!.messages.at(-1)!.parts.at(-1)!
+    expect(donePart).toMatchObject({
+      type: "tool", tool: "bash", state: "completed",
+      result: { ok: true, output: "64 pass", durationMs: 632 },
+    })
+    const doneTime = (donePart as { time: { start: number; end: number } }).time
+    expect(doneTime.end).toBeGreaterThanOrEqual(doneTime.start)
+    expect(doneTime.end).toBeGreaterThan(0)
+  })
+
+  test("permission_requested/feedback_injected 归约出 permission 与 feedback part", async () => {
+    const fake = {
+      run: async function* (_s: Session, _t: string): AsyncIterable<SessionEvent> {
+        yield { type: "assistant_started", messageId: "m1" }
+        yield { type: "permission_requested", partId: "", request: { id: "r1", tool: "bash", args: { command: "rm -rf dist" }, reason: "dangerous command", riskLevel: "high" } }
+        yield { type: "feedback_injected", partId: "", verifier: "bun test", status: "fail", summary: "1 failed: auth", failureIndex: 2 }
+      },
+    }
+    const updates: Session[] = []
+    const error = await driveSession(fake, s0, "hi", s => updates.push(s))
+    expect(error).toBeNull()
+    const permPart = updates[1]!.messages.at(-1)!.parts.at(-1)!
+    expect(permPart).toMatchObject({
+      type: "permission",
+      request: { id: "r1", tool: "bash", args: { command: "rm -rf dist" }, reason: "dangerous command", riskLevel: "high" },
+    })
+    const fbPart = updates[2]!.messages.at(-1)!.parts.at(-1)!
+    expect(fbPart).toMatchObject({
+      type: "feedback", verifier: "bun test", status: "fail", summary: "1 failed: auth", failureIndex: 2,
+    })
+  })
 })

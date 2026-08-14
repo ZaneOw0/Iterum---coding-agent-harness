@@ -51,7 +51,7 @@ export class AgentLoop {
           yield { type: "text_delta", messageId: assistant.id, partId: "", text: ev.text }
         } else if (ev.type === "reasoning_delta") {
           const last = assistant.parts.at(-1)
-          if (last?.type === "reasoning") last.markdown += ev.text
+          if (last?.type === "reasoning") { last.markdown += ev.text; last.time.end = Date.now() }
           else assistant.parts.push({ type: "reasoning", markdown: ev.text, time: { start: Date.now(), end: Date.now() } })
           yield { type: "reasoning_delta", messageId: assistant.id, partId: "", text: ev.text }
         } else if (ev.type === "tool_call") {

@@ -26,7 +26,11 @@ export function appArgs(argv: string[], mainPath: string): string[] {
 
 export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "connect") return runConnect(argv.slice(1))
-  if (argv.includes("--help")) { console.log("Usage: iterum [--headless] [--mock] [--allow] [--prompt <text>]"); return 0 }
+  if (argv.includes("--help")) {
+    console.log("Usage: iterum [--headless] [--mock] [--allow] [--prompt <text>]")
+    console.log("       iterum connect <openai|anthropic> --set|--show|--clear [--from-stdin <key>]")
+    return 0
+  }
   for (const a of argv) if (a.startsWith("-") && !["--headless", "--mock", "--prompt", "--allow"].includes(a)) return 2
 
   const headless = argv.includes("--headless")

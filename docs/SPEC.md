@@ -431,7 +431,7 @@ CredentialEntry { provider, source: "keychain"|"env", status: set|unset }  # 永
 | E6 | git hooks 高熵扫描、session 目录 0700 | §4.2 | M2 |
 | E7 | 黑名单用户可配置扩展（配置文件加载） | §3.4 | M1 支持构造函数注入规则；配置加载 M2 |
 | E8 | MCP 连接数上限 8、重连退避 | §3.9 | M2 |
-| E9 | `new/list/resume` 命令、`--model/--provider` 参数 | §3.8/§3.12 | M2 |
+| E9 | `new/list/resume` 命令、`--model/--provider` CLI 参数 | §3.8/§3.12 | M2；注：TUI 内 slash `/connect` `/model` `/effort` 已提前实现（2026-08-14，见 docs/specs/2026-08-14-slash-commands-design.md）——`/status` `/skills` `/mcp` 仍为 M2 |
 | E10 | ContextUsage 实时更新 | §4.4/验收 6 | M1 显示占位 0；M2 从 provider usage 回填 |
 | E11 | ReasoningPart.title 数据源 | §7/US2 | M1 title 可选置空；M2 由 reasoning 签名提供 |
 | E12 | 失败计数 UI 落点 | US6 | M2（FeedbackPart 已可见） |

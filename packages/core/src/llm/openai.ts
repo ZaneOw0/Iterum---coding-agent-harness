@@ -4,8 +4,11 @@ import { resolveEffort, type EffortLevel, type VendorDef } from "./vendors"
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI
-  constructor(private opts: { apiKey: string; model?: string; baseURL?: string; vendor?: VendorDef }) {
-    this.client = new OpenAI({ apiKey: opts.apiKey, baseURL: opts.baseURL ?? opts.vendor?.baseURL })
+  constructor(private opts: { apiKey: string; model?: string; baseURL?: string; vendor?: VendorDef; fetchImpl?: typeof fetch }) {
+    this.client = new OpenAI({
+      apiKey: opts.apiKey, baseURL: opts.baseURL ?? opts.vendor?.baseURL,
+      ...(opts.fetchImpl ? { fetch: opts.fetchImpl } : {}),
+    })
   }
   async *complete(req: ChatRequest): AsyncIterable<LLMEvent> {
     const create: Record<string, unknown> = {

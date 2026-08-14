@@ -79,17 +79,33 @@ export function reduceSession(session: Session, event: SessionEvent): Session {
   return session
 }
 
+// 对话过程状态文案：按事件类型映射（空串 = 无状态）
+export function statusFor(ev: SessionEvent): string {
+  switch (ev.type) {
+    case "assistant_started": return "连接中…"
+    case "reasoning_delta": return "思考中…"
+    case "tool_started": return `执行工具 ${ev.tool}…`
+    case "tool_completed":
+    case "text_delta": return "回复中…"
+    case "assistant_completed":
+    case "session_idle": return ""
+    default: return ""
+  }
+}
+
 // 驱动事件流：run() 抛错不重抛，转为错误字符串返回（null = 成功）
 export async function driveSession(
   loop: Pick<AgentLoop, "run">,
   session: Session,
   text: string,
   onUpdate: (s: Session) => void,
+  onEvent?: (ev: SessionEvent) => void,
 ): Promise<string | null> {
   // run() 会原地改写传入的 session；给浅拷贝让状态对象保持干净，事件归约产出新状态
   let cur: Session = { ...session, messages: [...session.messages] }
   try {
     for await (const ev of loop.run(cur, text)) {
+      onEvent?.(ev)
       cur = reduceSession(cur, ev)
       onUpdate(cur)
     }
@@ -132,6 +148,7 @@ export function TuiApp({ session, loop, runtime, store, fetcher = fetchModels }:
 }) {
   const [s, setS] = useState(session)
   const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState("")
   const [dialog, setDialog] = useState<"connect" | "model" | "effort" | null>(null)
   const [models, setModels] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -201,10 +218,12 @@ export function TuiApp({ session, loop, runtime, store, fetcher = fetchModels }:
       return
     }
     setBusy(true)
+    setStatus("")
     try {
-      const driveError = await driveSession(loop, s, text, setS)
+      const driveError = await driveSession(loop, s, text, setS, ev => setStatus(statusFor(ev)))
       if (driveError) {
         // 错误呈现为一条 assistant 文本消息，TUI 不崩溃、busy 复位
+        setStatus(`Error: ${driveError}`)
         setS(cur => ({
           ...cur,
           messages: [...cur.messages, {
@@ -284,6 +303,7 @@ export function TuiApp({ session, loop, runtime, store, fetcher = fetchModels }:
       connected={runtime.connected}
       dialog={dialog}
       modelLabel={modelLabel}
+      composerStatus={status}
       connectProps={dialog === "connect" ? {
         vendors: VENDOR_OPTIONS, current: runtime.model, loading, error, models,
         onPickVendor, onSubmitKey, onPickModel, onManualModel, onCancel,

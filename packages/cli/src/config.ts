@@ -7,6 +7,7 @@ export interface AgentConfig {
   model?: string
   effort?: string
   modelCache?: Record<string, string[]>
+  proxy?: string
 }
 
 export function configPath(home: string = homedir()): string {

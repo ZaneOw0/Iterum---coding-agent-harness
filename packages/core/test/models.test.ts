@@ -40,4 +40,11 @@ describe("fetchModels", () => {
     expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/models")
     expect(models).toEqual(["gemini-3-pro"])
   })
+  test("注入的 fetchImpl 优先于全局 fetch", async () => {
+    let used = ""
+    const injected = (async (u: any) => { used = String(u); return new Response(JSON.stringify({ data: [{ id: "gpt-4o" }] }), { status: 200 }) }) as typeof fetch
+    const models = await fetchModels(getVendor("openai")!, "sk-test", injected)
+    expect(used).toBe("https://api.openai.com/v1/models")
+    expect(models).toEqual(["gpt-4o"])
+  })
 })

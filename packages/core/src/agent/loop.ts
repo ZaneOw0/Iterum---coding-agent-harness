@@ -1,4 +1,5 @@
 import type { LLMProvider } from "../llm/types"
+import type { EffortLevel } from "../llm/vendors"
 import type { ToolRegistry } from "../tools/types"
 import { PermissionGateway } from "../permission/gateway"
 import { VerifyRunner, formatFeedback } from "../feedback/verify"
@@ -15,6 +16,7 @@ export interface AgentDeps {
   skills?: Skill[]
   maxTurns?: number
   feedbackThreshold?: number
+  effort?: EffortLevel
 }
 
 export class AgentLoop {
@@ -37,6 +39,7 @@ export class AgentLoop {
       const req = {
         model: session.model, system: this.systemPrompt(session),
         messages: session.messages.slice(0, -1).map(m => ({ role: m.role, content: this.render(m) })),
+        effort: this.deps.effort,
       }
 
       let hadToolCall = false

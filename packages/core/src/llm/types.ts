@@ -5,7 +5,7 @@ export type LLMEvent =
   | { type: "done" }
 
 export interface ChatMessage { role: "user" | "assistant"; content: string }
-export interface ChatRequest { model: string; system: string; messages: ChatMessage[]; maxTokens?: number }
+export interface ChatRequest { model: string; system: string; messages: ChatMessage[]; maxTokens?: number; effort?: string }
 export interface LLMProvider { complete(req: ChatRequest): AsyncIterable<LLMEvent> }
 
 export type MockStep =

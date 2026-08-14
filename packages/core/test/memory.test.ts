@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { SkillCatalog, buildSkillSection, ReadSkillTool } from "../src/memory/skills"
 import { join } from "node:path"
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 
 const fixtures = join(import.meta.dir, "fixtures")
 
@@ -19,6 +21,16 @@ describe("SkillCatalog", () => {
     const deploy = skills.filter(s => s.name === "deploy")
     expect(deploy.length).toBe(1)
     expect(deploy[0]!.source).toBe("project")
+  })
+
+  test("discovers SKILL.md with CRLF line endings", () => {
+    const dir = mkdtempSync(join(tmpdir(), "iterum-crlf-"))
+    mkdirSync(join(dir, "crlf-skill"))
+    writeFileSync(join(dir, "crlf-skill", "SKILL.md"), "---\r\nname: crlf-skill\r\ndescription: works on windows\r\n---\r\n\r\n## Instructions\r\nbody\r\n")
+    const skills = SkillCatalog.discover(dir, join(dir, "project-skills"))
+    const s = skills.find(x => x.name === "crlf-skill")
+    expect(s).toBeDefined()
+    expect(s!.body).toContain("## Instructions")
   })
 })
 

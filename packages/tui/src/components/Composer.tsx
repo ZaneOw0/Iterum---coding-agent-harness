@@ -4,7 +4,7 @@ import { useInput } from "ink"
 
 export interface Usage { tokens: number; percent: number; costUsd: number }
 
-export function Composer({ onSubmit, usage, model, disabled = false }: { onSubmit: (text: string) => void; usage: Usage; model?: string; disabled?: boolean }) {
+export function Composer({ onSubmit, usage, model, disabled = false, status = "" }: { onSubmit: (text: string) => void; usage: Usage; model?: string; disabled?: boolean; status?: string }) {
   const [text, setText] = useState("")
   useInput((input, key) => {
     if (disabled) return
@@ -16,7 +16,7 @@ export function Composer({ onSubmit, usage, model, disabled = false }: { onSubmi
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text>❯ {text}</Text>
-      <Text dimColor>{model ?? "model"}  {usage.tokens.toLocaleString()} ({usage.percent}%) · ${usage.costUsd.toFixed(2)} · Enter 发送 · Ctrl+J 换行</Text>
+      <Text dimColor>{status ? `${status}  ` : ""}{model ?? "model"}  {usage.tokens.toLocaleString()} ({usage.percent}%) · ${usage.costUsd.toFixed(2)} · Enter 发送 · Ctrl+J 换行</Text>
     </Box>
   )
 }

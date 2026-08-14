@@ -15,11 +15,12 @@ export function App(props: {
   connected?: boolean
   dialog?: "connect" | "model" | "effort" | null
   modelLabel?: string
+  composerStatus?: string
   connectProps?: ConnectWizardProps
   modelProps?: ModelPickerProps
   effortProps?: EffortPickerProps
 }) {
-  const { session, onSubmit = () => {}, connected = true, dialog = null, modelLabel, connectProps, modelProps, effortProps } = props
+  const { session, onSubmit = () => {}, connected = true, dialog = null, modelLabel, composerStatus, connectProps, modelProps, effortProps } = props
   const { stdout } = useStdout()
   const wide = (stdout?.columns ?? 80) > 120
   return (
@@ -28,7 +29,7 @@ export function App(props: {
         {wide ? <Sidebar session={session} /> : null}
         <Box flexDirection="column" flexGrow={1}>
           <Transcript session={session} />
-          <Composer onSubmit={onSubmit} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={modelLabel ?? session.model} disabled={dialog != null} />
+          <Composer onSubmit={onSubmit} usage={{ tokens: session.contextUsage.inputTokens, percent: session.contextUsage.contextPercent, costUsd: session.contextUsage.costUsd }} model={modelLabel ?? session.model} status={composerStatus} disabled={dialog != null} />
         </Box>
       </Box>
       {dialog === "connect" && connectProps

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { driveSession, reduceSession, routeSlash } from "../src/tui"
+import { driveSession, reduceSession, routeSlash, statusFor } from "../src/tui"
 import { createSession } from "@iterum/core/transcript/session"
 import type { SessionEvent } from "@iterum/core/transcript/events"
 import type { Session } from "@iterum/core/transcript/types"
@@ -141,5 +141,37 @@ describe("routeSlash", () => {
     expect(routeSlash("/status")).toBeNull()
     expect(routeSlash("hello world")).toBeNull()
     expect(routeSlash("")).toBeNull()
+  })
+})
+
+describe("statusFor", () => {
+  test("事件类型映射为过程状态文案", () => {
+    expect(statusFor({ type: "assistant_started", messageId: "m1" })).toBe("连接中…")
+    expect(statusFor({ type: "reasoning_delta", messageId: "m1", partId: "", text: "x" })).toBe("思考中…")
+    expect(statusFor({ type: "tool_started", messageId: "m1", partId: "", tool: "bash", args: {} })).toBe("执行工具 bash…")
+    expect(statusFor({ type: "text_delta", messageId: "m1", partId: "", text: "hi" })).toBe("回复中…")
+    expect(statusFor({ type: "tool_completed", messageId: "m1", partId: "", result: { ok: true, output: "", durationMs: 0 } })).toBe("回复中…")
+  })
+
+  test("结束事件与其他事件清空状态", () => {
+    expect(statusFor({ type: "assistant_completed", messageId: "m1" })).toBe("")
+    expect(statusFor({ type: "session_idle" })).toBe("")
+    expect(statusFor({ type: "permission_requested", partId: "", request: { id: "r1", tool: "bash", args: {}, reason: "x", riskLevel: "low" } })).toBe("")
+  })
+})
+
+describe("driveSession onEvent", () => {
+  test("每个事件透出给 onEvent 回调", async () => {
+    const fake = {
+      run: async function* (_s: Session, _t: string): AsyncIterable<SessionEvent> {
+        yield { type: "assistant_started", messageId: "m1" }
+        yield { type: "text_delta", messageId: "m1", partId: "", text: "ok" }
+        yield { type: "session_idle" }
+      },
+    }
+    const seen: string[] = []
+    const error = await driveSession(fake, s0, "hi", () => {}, ev => { seen.push(ev.type) })
+    expect(error).toBeNull()
+    expect(seen).toEqual(["assistant_started", "text_delta", "session_idle"])
   })
 })

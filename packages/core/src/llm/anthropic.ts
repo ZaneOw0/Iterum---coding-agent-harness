@@ -11,8 +11,11 @@ type StreamEvent = {
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic
-  constructor(private opts: { apiKey: string; model?: string; baseURL?: string; vendor?: VendorDef }) {
-    this.client = new Anthropic({ apiKey: opts.apiKey, baseURL: opts.baseURL ?? opts.vendor?.baseURL })
+  constructor(private opts: { apiKey: string; model?: string; baseURL?: string; vendor?: VendorDef; fetchImpl?: typeof fetch }) {
+    this.client = new Anthropic({
+      apiKey: opts.apiKey, baseURL: opts.baseURL ?? opts.vendor?.baseURL,
+      ...(opts.fetchImpl ? { fetch: opts.fetchImpl } : {}),
+    })
   }
   async *complete(req: ChatRequest): AsyncIterable<LLMEvent> {
     const args: Record<string, unknown> = {

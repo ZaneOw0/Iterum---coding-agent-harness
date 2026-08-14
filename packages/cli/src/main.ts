@@ -18,6 +18,9 @@ import type { Session } from "@iterum/core/transcript/types"
 import { readConfig, writeConfig, type AgentConfig } from "./config"
 import { runConnect } from "./connect"
 import { runTui } from "./tui"
+import { detectProxy } from "./proxy-config"
+import { createProxiedFetch } from "@iterum/core/llm/proxy"
+import { fetchModels } from "@iterum/core/llm/models"
 
 // 从 Bun 进程 argv 剥离出用户参数：
 // 脚本模式 argv=[bun路径, 脚本路径, ...参数]；编译模式（Bun 1.3.14 实测）argv=["bun", 可执行文件, ...参数]，
@@ -33,6 +36,7 @@ export interface Runtime {
   providerName: string
   model: string
   effort?: string
+  fetchImpl?: typeof fetch
   loop: AgentLoop
   tools: ToolRegistry
   skills: Skill[]
@@ -47,6 +51,7 @@ interface ResolvedState {
   model: string
   effort?: string
   connected: boolean
+  fetchImpl?: typeof fetch
 }
 
 function mockHint(text: string): MockProvider {
@@ -57,15 +62,17 @@ async function resolveState(mock: boolean, config: AgentConfig, store: Credentia
   if (mock) {
     return { provider: new MockProvider([{ type: "text", text: "hello from iterum" }]), providerName: "mock", model: "mock", connected: false }
   }
+  const proxy = detectProxy(config)
+  const fetchImpl = proxy ? createProxiedFetch(proxy) : undefined
   if (config.provider) {
     const vendor = getVendor(config.provider)
     const cred = vendor ? await store.get(vendor.id) : undefined
     const model = config.model ?? vendor?.defaultModel ?? ""
     if (vendor && cred) {
       const provider = vendor.flavor === "openai"
-        ? new OpenAIProvider({ apiKey: cred.key, model, vendor })
-        : new AnthropicProvider({ apiKey: cred.key, model, vendor })
-      return { provider, providerName: vendor.id, model, effort: config.effort, connected: true }
+        ? new OpenAIProvider({ apiKey: cred.key, model, vendor, fetchImpl })
+        : new AnthropicProvider({ apiKey: cred.key, model, vendor, fetchImpl })
+      return { provider, providerName: vendor.id, model, effort: config.effort, connected: true, fetchImpl }
     }
     // 配置了厂商但钥匙串无 key：mock 提示态，不报错（与既有无凭据 TUI 行为一致）
     return {
@@ -75,9 +82,9 @@ async function resolveState(mock: boolean, config: AgentConfig, store: Credentia
   }
   // 无 config：维持既有探测逻辑
   const openai = await store.get("openai")
-  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key, vendor: getVendor("openai") }), providerName: "openai", model: getVendor("openai")?.defaultModel ?? "gpt-4o-mini", connected: true }
+  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key, vendor: getVendor("openai"), fetchImpl }), providerName: "openai", model: getVendor("openai")?.defaultModel ?? "gpt-4o-mini", connected: true, fetchImpl }
   const anthropic = await store.get("anthropic")
-  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key, vendor: getVendor("anthropic") }), providerName: "anthropic", model: getVendor("anthropic")?.defaultModel ?? "claude-sonnet-4-5", connected: true }
+  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key, vendor: getVendor("anthropic"), fetchImpl }), providerName: "anthropic", model: getVendor("anthropic")?.defaultModel ?? "claude-sonnet-4-5", connected: true, fetchImpl }
   return {
     provider: mockHint("No provider credentials found. Run /connect to add a key — replying in mock mode until then."),
     providerName: "mock", model: "mock", connected: false,
@@ -123,7 +130,7 @@ export async function createRuntime(opts: { mock: boolean; allowDanger: boolean;
     const providerName = patch.providerName ?? state.providerName
     const model = patch.model ?? state.model
     const effort = patch.effort !== undefined ? patch.effort : state.effort
-    const next = await resolveState(opts.mock, { provider: providerName, model, effort }, store)
+    const next = await resolveState(opts.mock, { provider: providerName, model, effort, proxy: opts.config.proxy }, store)
     // 无 key 且厂商真正切换：拒绝，保持现状；同厂商的 model/effort 调整允许（mock 提示态继续）
     if (!next.connected && !opts.mock && next.providerName !== state.providerName) return 1
     state = next
@@ -140,6 +147,7 @@ export async function createRuntime(opts: { mock: boolean; allowDanger: boolean;
     get providerName() { return state.providerName },
     get model() { return state.model },
     get effort() { return state.effort },
+    get fetchImpl() { return state.fetchImpl },
     loop, tools, skills, verify, permissions, rebuild,
   }
 }
@@ -166,7 +174,11 @@ export async function main(argv: string[]): Promise<number> {
   const runtime = await createRuntime({ mock, allowDanger, config: readConfig(), store })
 
   if (!headless) {
-    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected, runtime, store })
+    const fetchImpl = runtime.fetchImpl
+    const proxiedFetcher = fetchImpl
+      ? (vendor: Parameters<typeof fetchModels>[0], key: string) => fetchModels(vendor, key, fetchImpl)
+      : fetchModels
+    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected, runtime, store, fetcher: proxiedFetcher })
     return 0
   }
   if (!runtime.connected && !mock) {

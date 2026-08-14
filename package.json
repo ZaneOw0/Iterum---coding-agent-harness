@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": ["packages/*"],
   "devDependencies": {
-    "@types/bun": "^1.3.14"
+    "@types/bun": "^1.3.14",
+    "@iterum/core": "workspace:*"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

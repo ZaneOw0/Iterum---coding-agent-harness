@@ -9,13 +9,13 @@ export class CredentialStore {
   constructor(private opts: { envDir?: string; envFile?: string } = {}) {}
   private entry(provider: string) { return new Entry(SERVICE, provider) }
 
-  async set(provider: "openai" | "anthropic", key: string): Promise<void> {
+  async set(provider: string, key: string): Promise<void> {
     this.entry(provider).setPassword(key)
   }
-  async remove(provider: "openai" | "anthropic"): Promise<void> {
+  async remove(provider: string): Promise<void> {
     this.entry(provider).deletePassword()
   }
-  async get(provider: "openai" | "anthropic"): Promise<ProviderCredential | undefined> {
+  async get(provider: string): Promise<ProviderCredential | undefined> {
     const stored = this.entry(provider).getPassword()
     if (stored) return { key: stored, source: "keychain" }
     const env = this.loadEnv()

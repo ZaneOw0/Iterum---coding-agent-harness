@@ -20,6 +20,11 @@ describe("cli", () => {
     expect(code).toBe(0)
     expect(out.some(l => l.includes('"type":"session_idle"'))).toBe(true)
   })
+
+  test("--headless --mock 仍输出事件流（回归）", async () => {
+    const exit = await main(["--headless", "--mock", "--prompt", "hello"])
+    expect(exit).toBe(0)
+  })
 })
 
 describe("appArgs", () => {

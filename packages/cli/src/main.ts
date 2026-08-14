@@ -4,6 +4,7 @@ import { MockProvider } from "@iterum/core/llm/mock"
 import { OpenAIProvider } from "@iterum/core/llm/openai"
 import { AnthropicProvider } from "@iterum/core/llm/anthropic"
 import type { LLMProvider } from "@iterum/core/llm/types"
+import { getVendor, type EffortLevel } from "@iterum/core/llm/vendors"
 import { CredentialStore } from "@iterum/core/credentials/store"
 import { AgentLoop } from "@iterum/core/agent/loop"
 import { ToolRegistry } from "@iterum/core/tools/registry"
@@ -11,8 +12,10 @@ import { BashTool } from "@iterum/core/tools/bash"
 import { ReadFileTool, WriteFileTool } from "@iterum/core/tools/fs"
 import { PermissionGateway } from "@iterum/core/permission/gateway"
 import { VerifyRunner } from "@iterum/core/feedback/verify"
-import { SkillCatalog, ReadSkillTool } from "@iterum/core/memory/skills"
+import { SkillCatalog, ReadSkillTool, type Skill } from "@iterum/core/memory/skills"
 import { createSession } from "@iterum/core/transcript/session"
+import type { Session } from "@iterum/core/transcript/types"
+import { readConfig, writeConfig, type AgentConfig } from "./config"
 import { runConnect } from "./connect"
 import { runTui } from "./tui"
 
@@ -22,6 +25,121 @@ import { runTui } from "./tui"
 export function appArgs(argv: string[], mainPath: string): string[] {
   const i = argv.indexOf(mainPath)
   return i >= 0 ? argv.slice(i + 1) : argv.slice(2)
+}
+
+export interface Runtime {
+  session: Session
+  connected: boolean
+  providerName: string
+  model: string
+  effort?: string
+  loop: AgentLoop
+  tools: ToolRegistry
+  skills: Skill[]
+  verify: VerifyRunner
+  permissions: PermissionGateway
+  rebuild: (patch: { providerName?: string; model?: string; effort?: string }) => Promise<number>
+}
+
+interface ResolvedState {
+  provider: LLMProvider
+  providerName: string
+  model: string
+  effort?: string
+  connected: boolean
+}
+
+function mockHint(text: string): MockProvider {
+  return new MockProvider([{ type: "text", text }])
+}
+
+async function resolveState(mock: boolean, config: AgentConfig, store: CredentialStore): Promise<ResolvedState> {
+  if (mock) {
+    return { provider: new MockProvider([{ type: "text", text: "hello from iterum" }]), providerName: "mock", model: "mock", connected: false }
+  }
+  if (config.provider) {
+    const vendor = getVendor(config.provider)
+    const cred = vendor ? await store.get(vendor.id) : undefined
+    if (vendor && cred) {
+      const provider = vendor.flavor === "openai"
+        ? new OpenAIProvider({ apiKey: cred.key, model: config.model, vendor })
+        : new AnthropicProvider({ apiKey: cred.key, model: config.model, vendor })
+      return { provider, providerName: vendor.id, model: config.model ?? "", effort: config.effort, connected: true }
+    }
+    // 配置了厂商但钥匙串无 key：mock 提示态，不报错（与既有无凭据 TUI 行为一致）
+    return {
+      provider: mockHint(`No ${config.provider} API key found. Run /connect to add a key — replying in mock mode until then.`),
+      providerName: config.provider, model: config.model ?? "", effort: config.effort, connected: false,
+    }
+  }
+  // 无 config：维持既有探测逻辑
+  const openai = await store.get("openai")
+  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key }), providerName: "openai", model: "gpt-4o-mini", connected: true }
+  const anthropic = await store.get("anthropic")
+  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key }), providerName: "anthropic", model: "claude-sonnet-4-5", connected: true }
+  return {
+    provider: mockHint("No provider credentials found. Run /connect to add a key — replying in mock mode until then."),
+    providerName: "mock", model: "mock", connected: false,
+  }
+}
+
+export async function createRuntime(opts: { mock: boolean; allowDanger: boolean; config: AgentConfig; store?: CredentialStore; home?: string }): Promise<Runtime> {
+  const store = opts.store ?? new CredentialStore()
+  const home = opts.home ?? homedir()
+  const tools = new ToolRegistry()
+  tools.register(new ReadFileTool()); tools.register(new WriteFileTool())
+  tools.register(new BashTool(async (cmd, cwd) => {
+    const r = Bun.spawnSync({ cmd: ["cmd", "/c", cmd], cwd, stdout: "pipe", stderr: "pipe" })
+    return { exitCode: r.exitCode ?? 1, output: r.stdout.toString() + r.stderr.toString() }
+  }))
+  const skills = SkillCatalog.discover(
+    join(homedir(), ".iterum", "skills"),
+    join(process.cwd(), ".iterum", "skills"),
+  )
+  tools.register(new ReadSkillTool(skills))
+
+  const permissions = new PermissionGateway()
+  const verify = new VerifyRunner(process.env.ITERUM_TEST_CMD ?? "bun test", async (cmd, cwd) => {
+    const r = Bun.spawnSync({ cmd: cmd.split(" "), cwd, stdout: "pipe", stderr: "pipe" })
+    return { exitCode: r.exitCode ?? 1, output: r.stdout.toString() + r.stderr.toString() }
+  })
+
+  let state = await resolveState(opts.mock, opts.config, store)
+
+  // headless 默认 deny（安全默认，SPEC §3.4）；--allow 显式放行
+  function buildLoop(provider: LLMProvider, effort?: string) {
+    return new AgentLoop({
+      provider, tools, permissions, verify, skills,
+      resolvePermission: async () => opts.allowDanger ? "allow" as const : "deny" as const,
+      effort: effort as EffortLevel | undefined,
+    })
+  }
+
+  let loop = buildLoop(state.provider, state.effort)
+  let session = createSession({ cwd: process.cwd(), title: "iterum", provider: state.providerName, model: state.model })
+
+  async function rebuild(patch: { providerName?: string; model?: string; effort?: string }): Promise<number> {
+    const providerName = patch.providerName ?? state.providerName
+    const model = patch.model ?? state.model
+    const effort = patch.effort !== undefined ? patch.effort : state.effort
+    const next = await resolveState(opts.mock, { provider: providerName, model, effort }, store)
+    // 无 key 且厂商真正切换：拒绝，保持现状；同厂商的 model/effort 调整允许（mock 提示态继续）
+    if (!next.connected && !opts.mock && next.providerName !== state.providerName) return 1
+    state = next
+    loop = buildLoop(state.provider, state.effort)
+    session.model = state.model
+    writeConfig({ provider: state.providerName, model: state.model, effort: state.effort }, home)
+    return 0
+  }
+
+  return {
+    session,
+    get connected() { return state.connected },
+    get providerName() { return state.providerName },
+    get model() { return state.model },
+    get effort() { return state.effort },
+    loop, tools, skills, verify, permissions, rebuild,
+  }
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -41,69 +159,18 @@ export async function main(argv: string[]): Promise<number> {
 
   if (!headless && !process.stdin.isTTY) { console.log("interactive TUI requires a terminal; use --headless"); return 0 }
 
-  let provider: LLMProvider
-  let providerName: string
-  let model: string
-  let connected = false
-  if (mock) {
-    provider = new MockProvider([{ type: "text", text: "hello from iterum" }])
-    providerName = "mock"; model = "mock"
-  } else {
-    const cred = await resolveProvider()
-    if (cred) {
-      provider = cred.provider
-      providerName = cred.name
-      model = cred.model
-      connected = true
-    } else if (headless) {
-      console.error("real provider requires credentials; run iterum connect --set")
-      return 1
-    } else {
-      // 凭据缺失提示态：mock 回复引导 /connect（footer 同时显示 Get started /connect）
-      provider = new MockProvider([{ type: "text", text: "No provider credentials found. Run /connect to add a key — replying in mock mode until then." }])
-      providerName = "mock"; model = "mock"
-    }
-  }
-
-  const tools = new ToolRegistry()
-  tools.register(new ReadFileTool()); tools.register(new WriteFileTool())
-  tools.register(new BashTool(async (cmd, cwd) => {
-    const r = Bun.spawnSync({ cmd: ["cmd", "/c", cmd], cwd, stdout: "pipe", stderr: "pipe" })
-    return { exitCode: r.exitCode ?? 1, output: r.stdout.toString() + r.stderr.toString() }
-  }))
-  const skills = SkillCatalog.discover(
-    join(homedir(), ".iterum", "skills"),
-    join(process.cwd(), ".iterum", "skills"),
-  )
-  tools.register(new ReadSkillTool(skills))
-
-  const verify = new VerifyRunner(process.env.ITERUM_TEST_CMD ?? "bun test", async (cmd, cwd) => {
-    const r = Bun.spawnSync({ cmd: cmd.split(" "), cwd, stdout: "pipe", stderr: "pipe" })
-    return { exitCode: r.exitCode ?? 1, output: r.stdout.toString() + r.stderr.toString() }
-  })
-  // headless 默认 deny（安全默认，SPEC §3.4）；--allow 显式放行
-  const loop = new AgentLoop({
-    provider, tools, permissions: new PermissionGateway(), verify, skills,
-    resolvePermission: async () => allowDanger ? "allow" : "deny",
-  })
-  const session = createSession({ cwd: process.cwd(), title: headless ? "headless" : "iterum", provider: providerName, model })
+  const runtime = await createRuntime({ mock, allowDanger, config: readConfig() })
 
   if (!headless) {
-    runTui({ session, loop, connected })
+    runTui({ session: runtime.session, loop: runtime.loop, connected: runtime.connected })
     return 0
   }
-
-  for await (const ev of loop.run(session, prompt)) console.log(JSON.stringify(ev))
+  if (!runtime.connected && !mock) {
+    console.error("real provider requires credentials; run iterum connect --set")
+    return 1
+  }
+  for await (const ev of runtime.loop.run(runtime.session, prompt)) console.log(JSON.stringify(ev))
   return 0
-}
-
-async function resolveProvider(): Promise<{ provider: LLMProvider; name: string; model: string } | null> {
-  const store = new CredentialStore()
-  const openai = await store.get("openai")
-  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key }), name: "openai", model: "gpt-4o-mini" }
-  const anthropic = await store.get("anthropic")
-  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key }), name: "anthropic", model: "claude-sonnet-4-5" }
-  return null
 }
 
 if (import.meta.main) process.exitCode = await main(appArgs(Bun.argv, Bun.main))

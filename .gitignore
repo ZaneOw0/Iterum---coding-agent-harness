@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+~/.iterum/
 bun.lockb
 .DS_Store
 spikes/dist/

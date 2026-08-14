@@ -53,3 +53,5 @@ export async function main(argv: string[]): Promise<number> {
   for await (const ev of loop.run(session, prompt)) console.log(JSON.stringify(ev))
   return 0
 }
+
+if (import.meta.main) process.exitCode = await main(Bun.argv)

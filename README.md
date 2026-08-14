@@ -37,10 +37,10 @@ Iterum 是一个 **CLI-only** 的 coding agent（类 Claude Code / opencode）�
 
 ```bash
 docker build -t iterum:latest .
-docker run -it -v $PWD/.env:/app/.env -v $PWD:/workspace iterum:latest
+docker run -it -w /app -v $PWD/.env:/app/.env -v $PWD:/workspace iterum:latest
 ```
 
-> 容器内无 OS 钥匙串：key 只能经 `.env` 挂载注入（明文风险见下）。
+> 容器内无 OS 钥匙串：key 只能经 `.env` 挂载注入（明文风险见下）；`-w /app` 将容器 cwd 对齐挂载点——程序从 cwd 加载 `.env`。
 
 ### 源码
 

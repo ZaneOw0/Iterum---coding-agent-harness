@@ -1,6 +1,10 @@
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { MockProvider } from "@iterum/core/llm/mock"
+import { OpenAIProvider } from "@iterum/core/llm/openai"
+import { AnthropicProvider } from "@iterum/core/llm/anthropic"
+import type { LLMProvider } from "@iterum/core/llm/types"
+import { CredentialStore } from "@iterum/core/credentials/store"
 import { AgentLoop } from "@iterum/core/agent/loop"
 import { ToolRegistry } from "@iterum/core/tools/registry"
 import { BashTool } from "@iterum/core/tools/bash"
@@ -10,6 +14,7 @@ import { VerifyRunner } from "@iterum/core/feedback/verify"
 import { SkillCatalog, ReadSkillTool } from "@iterum/core/memory/skills"
 import { createSession } from "@iterum/core/transcript/session"
 import { runConnect } from "./connect"
+import { runTui } from "./tui"
 
 export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "connect") return runConnect(argv.slice(1))
@@ -22,13 +27,31 @@ export async function main(argv: string[]): Promise<number> {
   const mock = argv.includes("--mock")
   const allowDanger = argv.includes("--allow")
 
-  if (!headless) {
-    console.log("TUI not yet wired (Task 16); use --headless")
-    return 0
-  }
+  if (!headless && !process.stdin.isTTY) { console.log("interactive TUI requires a terminal; use --headless"); return 0 }
 
-  const provider = mock ? new MockProvider([{ type: "text", text: "hello from iterum" }]) : null
-  if (!provider) { console.error("real provider requires credentials; /connect coming in TUI task"); return 1 }
+  let provider: LLMProvider
+  let providerName: string
+  let model: string
+  let connected = false
+  if (mock) {
+    provider = new MockProvider([{ type: "text", text: "hello from iterum" }])
+    providerName = "mock"; model = "mock"
+  } else {
+    const cred = await resolveProvider()
+    if (cred) {
+      provider = cred.provider
+      providerName = cred.name
+      model = cred.model
+      connected = true
+    } else if (headless) {
+      console.error("real provider requires credentials; run iterum connect --set")
+      return 1
+    } else {
+      // 凭据缺失提示态：mock 回复引导 /connect（footer 同时显示 Get started /connect）
+      provider = new MockProvider([{ type: "text", text: "No provider credentials found. Run /connect to add a key — replying in mock mode until then." }])
+      providerName = "mock"; model = "mock"
+    }
+  }
 
   const tools = new ToolRegistry()
   tools.register(new ReadFileTool()); tools.register(new WriteFileTool())
@@ -51,9 +74,24 @@ export async function main(argv: string[]): Promise<number> {
     provider, tools, permissions: new PermissionGateway(), verify, skills,
     resolvePermission: async () => allowDanger ? "allow" : "deny",
   })
-  const session = createSession({ cwd: process.cwd(), title: "headless", provider: "mock", model: "mock" })
+  const session = createSession({ cwd: process.cwd(), title: headless ? "headless" : "iterum", provider: providerName, model })
+
+  if (!headless) {
+    runTui({ session, loop, connected })
+    return 0
+  }
+
   for await (const ev of loop.run(session, prompt)) console.log(JSON.stringify(ev))
   return 0
+}
+
+async function resolveProvider(): Promise<{ provider: LLMProvider; name: string; model: string } | null> {
+  const store = new CredentialStore()
+  const openai = await store.get("openai")
+  if (openai) return { provider: new OpenAIProvider({ apiKey: openai.key }), name: "openai", model: "gpt-4o-mini" }
+  const anthropic = await store.get("anthropic")
+  if (anthropic) return { provider: new AnthropicProvider({ apiKey: anthropic.key }), name: "anthropic", model: "claude-sonnet-4-5" }
+  return null
 }
 
 if (import.meta.main) process.exitCode = await main(Bun.argv)

@@ -27,3 +27,6 @@ export type { ProviderCredential } from "./credentials/store"
 
 export { SessionStore } from "./session/store"
 export type { SessionSummary } from "./session/store"
+
+export { PermissionGateway, defaultRules } from "./permission/gateway"
+export type { PermissionDecision, PermissionRule, PermissionCheckResult } from "./permission/types"

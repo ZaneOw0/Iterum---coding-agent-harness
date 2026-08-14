@@ -85,11 +85,17 @@
 | T1 | using-git-worktrees + TDD | ... | ... | ... | ... |
 | ... | ... | ... | ... | ... | ... |
 
-## CI/CD 执行记录（占位）
+## CI/CD 执行记录
 
-| 时间 | 平台 | job | 状态 | 链接/证据 |
+> 数据来源：`gh run list` / `gh run view` / `gh api .../actions/artifacts`（2026-08-14 查询，查询时 HEAD 3423cc2）。
+> 证据归档方式：以 GitHub Actions run 永久链接为归档（SPEC 附录 B 差异表 R8：允许"记录链接"），截图以链接为准。
+
+| 日期 | 平台 | workflow | job 与结论 | 链接/证据 |
 |---|---|---|---|---|
-| ... | GitLab | unit-test | ... | ... |
-| ... | GitHub Actions | unit-test / build | ... | ... |
+| 2026-08-14 | GitLab | `.gitlab-ci.yml` | unit-test：定义正确（`bun install --frozen-lockfile` → `make test` → `make demo`，含 `artifacts: when: always`）——静态满足业务要求；无 GitLab 实例，未实际执行，由 GitHub Actions 等效覆盖（同一 make test/make demo 命令集，SPEC 差异表 R7） | 仓库根目录 `.gitlab-ci.yml` |
+| 2026-08-14 | GitHub Actions | ci（main push） | unit-test: success；build (ubuntu-latest, bun-linux-x64): success；build (macos-latest, bun-darwin-arm64): success；build (windows-latest, bun-windows-x64): success；耗时 58s | https://github.com/ZaneOw0/Iterum---coding-agent-harness/actions/runs/31803854521 |
+| 2026-08-14 | GitHub Actions | ci（main push） | 同前，4 job 全 success（上一次 main 合并，1m7s） | https://github.com/ZaneOw0/Iterum---coding-agent-harness/actions/runs/31803844198 |
 
-> 要求：最后一次 CI/CD 执行必须为 pass。
+产物（run 31803854521，headSha 3423cc2，均未过期）：iterum-win-x64.exe（40,589,103 B）、iterum-macos-arm64（25,391,605 B）、iterum-linux-x64（39,872,975 B）。
+
+> 要求：最后一次 CI/CD 执行必须为 pass。——当前满足：最后一次 main run 31803854521 全绿（2026-08-14）；T20 自身合并后的最终 run 由 controller 补记于此。

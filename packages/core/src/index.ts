@@ -31,5 +31,8 @@ export type { SessionSummary } from "./session/store"
 export { VerifyRunner, formatFeedback } from "./feedback/verify"
 export type { ChangedFile, Feedback } from "./feedback/types"
 
+export { AgentLoop } from "./agent/loop"
+export type { AgentDeps } from "./agent/loop"
+
 export { MCPClient } from "./mcp/client"
 export type { MCPClientConfig } from "./mcp/client"

@@ -16,7 +16,8 @@
 - TDD 硬性：每 task 先写失败测试 → 运行看到 RED → 最小实现 → GREEN → 提交。禁止先实现后补测试；违反此约束的代码将被删除重做。
 - 凭据红线：key 字符串绝不落盘、绝不进日志/事件流/transcript/错误信息；测试中绝不出现真实 key（只用 `test-key-***` 占位）。
 - 命名/路径约定：core 包路径前缀 `packages/core/src/...`；类型与接口名以本计划 "Interfaces" 区块为准（跨 task 一致性）。
-- 每个 task 结束必须 `git commit`（单 task 单提交）；提交信息格式 `feat(scope): summary`。
+- 每个 task 结束必须 `git commit`（单 task 单提交）；提交信息按业主全局格式：**中文** `feat(scope): 标题` + 空行 + `- ` 要点列表（本计划各处英文提交示例一律按此格式改写，scope 保留）。
+- 开发一律在从 main 拉出的 worktree 中进行，禁止直接在 main 上开发（业主约定，AGENT_LOG P-9）。
 - 每 task 完成后执行两阶段评审（spec 合规 → 代码质量），Critical 问题必须修复才进下一 task。
 - Windows 为当前开发验证平台（PowerShell 5.1）；所有命令在 repo 根目录执行。
 
@@ -27,7 +28,8 @@
 **目标：** 建立 Bun workspace 单仓结构与一键测试入口。
 
 **涉及文件：**
-- Create: `package.json`（workspaces）、`tsconfig.json`、`packages/core/package.json`、`packages/tui/package.json`、`packages/cli/package.json`、`packages/core/tsconfig.json`、`packages/core/src/index.ts`、`packages/core/test/smoke.test.ts`、`Makefile`、`.gitignore`
+- Create: `package.json`（workspaces）、`tsconfig.json`、`packages/core/package.json`、`packages/tui/package.json`、`packages/cli/package.json`、`packages/core/src/index.ts`、`packages/core/test/smoke.test.ts`、`bunfig.toml`（registry 显式 npmjs，防机器级镜像渗入 lock）、`Makefile`、`.gitignore`
+- 注：`packages/core/tsconfig.json` 等子包 tsconfig 不创建——根 tsconfig 已覆盖（T1 评审 Ruling）
 
 **Interfaces:**
 - Produces: 根命令 `make test`（= `bun test`）；workspace 包名 `@iterum/core`、`@iterum/tui`、`@iterum/cli`。

@@ -17,3 +17,6 @@ export type {
 } from "./transcript/types"
 export type { SessionEvent } from "./transcript/events"
 export { createSession, appendPart } from "./transcript/session"
+
+export type { LLMEvent, ChatMessage, ChatRequest, LLMProvider, MockStep } from "./llm/types"
+export { MockProvider } from "./llm/mock"

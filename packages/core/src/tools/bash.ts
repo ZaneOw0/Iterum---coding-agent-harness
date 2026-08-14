@@ -2,6 +2,7 @@ import type { CommandRunner, Tool, ToolCall } from "./types"
 
 export class BashTool implements Tool {
   name = "bash"; description = "Run a shell command in the workspace"
+  parameters = { type: "object", properties: { command: { type: "string" } }, required: ["command"] }
   constructor(private runner: CommandRunner, private cwd: string = process.cwd()) {}
   async execute(call: ToolCall) {
     const { command } = call.args as { command: string }

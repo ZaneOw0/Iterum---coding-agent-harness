@@ -1,7 +1,7 @@
 # Slash 指令：/connect /model /effort —— 设计文档
 
 **日期**：2026-08-14
-**状态**：已实现（T25-T29 合入 main；/connect /model /effort 可用，8 家厂商）。
+**状态**：已实现（T25-T29 合入 main；/connect /model /effort 可用，8 家厂商）。后续扩展（2026-08-14）：新增 `/` 触发指令浮窗（↑/↓ 选择、Tab 补全、实时过滤）与 `/help` `/exit` 两条指令。
 **背景**：M1 已交付（main @ 300eab7）。用户在 TUI 内输入 slash 指令切换厂商/模型/思考强度的能力被列为加急需求，从 M2 提前实现。
 
 ## 1. 目标

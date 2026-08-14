@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { ToolRegistry } from "../src/tools/registry"
 import { ReadFileTool, WriteFileTool } from "../src/tools/fs"
 import { BashTool } from "../src/tools/bash"
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 
@@ -20,6 +20,19 @@ describe("tools", () => {
     const res = await new ReadFileTool().execute({ name: "read_file", args: { path: join(dir, "a.txt") } })
     expect(res.ok).toBe(true)
     expect(res.output).toContain("hello")
+  })
+
+  test("write_file with bare filename skips mkdir('.') (Bun/Windows EEXIST)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "iterum-"))
+    const prev = process.cwd()
+    process.chdir(dir)
+    try {
+      const res = await new WriteFileTool().execute({ name: "write_file", args: { path: "bare.txt", content: "x" } })
+      expect(res.ok).toBe(true)
+      expect(readFileSync("bare.txt", "utf8")).toBe("x")
+    } finally {
+      process.chdir(prev)
+    }
   })
 
   test("bash uses injected runner, never real shell", async () => {

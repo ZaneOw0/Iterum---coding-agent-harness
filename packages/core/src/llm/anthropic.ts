@@ -21,8 +21,15 @@ export class AnthropicProvider implements LLMProvider {
     const args: Record<string, unknown> = {
       model: this.opts.model ?? req.model,
       system: req.system,
-      max_tokens: req.maxTokens ?? 4096,
+      max_tokens: req.maxTokens ?? 8192,
       messages: req.messages,
+    }
+    if (req.tools && req.tools.length > 0) {
+      args.tools = req.tools.map(f => ({
+        name: f.function.name,
+        description: f.function.description ?? "",
+        input_schema: f.function.parameters ?? { type: "object", properties: {} },
+      }))
     }
     const ep = resolveEffort(this.opts.vendor, this.opts.model ?? req.model, req.effort as EffortLevel | undefined)
     if (ep?.kind === "thinking") args.thinking = { type: "enabled", budget_tokens: ep.budget }

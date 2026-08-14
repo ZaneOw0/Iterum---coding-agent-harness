@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process"
+import type { VendorDef } from "@iterum/core/llm/vendors"
+import { createProxiedFetch } from "@iterum/core/llm/proxy"
 
 export interface ProxyTarget { host: string; port: number }
 
@@ -51,4 +53,12 @@ function registryQuery(name: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+// 按厂商决定 fetch 实现：显式 cfg.proxy 强制走代理；否则 direct 厂商（国内可达）
+// 直连；其余检测代理（cfg.proxy 显式 → 系统代理）并构造隧道 fetch。
+export function vendorFetch(vendor: VendorDef | undefined, cfg: { proxy?: string }, query?: (name: string) => string | undefined, platform: string = process.platform): typeof fetch | undefined {
+  if (!cfg.proxy && vendor?.direct) return undefined
+  const proxy = detectProxy(cfg, query, platform)
+  return proxy ? createProxiedFetch(proxy) : undefined
 }
